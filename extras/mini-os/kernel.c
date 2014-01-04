@@ -27,7 +27,6 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <mini-os/os.h>
 #include <mini-os/hypervisor.h>
 #include <mini-os/mm.h>
 #include <mini-os/events.h>
@@ -58,7 +57,7 @@ void setup_xen_features(void)
         fi.submap_idx = i;
         if (HYPERVISOR_xen_version(XENVER_get_features, &fi) < 0)
             break;
-        
+
         for (j=0; j<32; j++)
             xen_features[i*32+j] = !!(fi.submap & 1<<j);
     }
@@ -106,44 +105,18 @@ static void shutdown_thread(void *p)
 /* This should be overridden by the application we are linked against. */
 __attribute__((weak)) int app_main(start_info_t *si)
 {
-    printk("Dummy main: start_info=%p\n", si);
+	printk("Dummy main: start_info=%p\n", si);
     return 0;
 }
 
-/*
- * INITIAL C ENTRY POINT.
- */
-void start_kernel(start_info_t *si)
+void gic_init(void);
+
+void start_kernel(void)
 {
-    static char hello[] = "Bootstrapping...\n";
-
-    (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(hello), hello);
-
-    arch_init(si);
-
-    trap_init();
-
-    /* print out some useful information  */
-    printk("Xen Minimal OS!\n");
-    printk("  start_info: %p(VA)\n", si);
-    printk("    nr_pages: 0x%lx\n", si->nr_pages);
-    printk("  shared_inf: 0x%08lx(MA)\n", si->shared_info);
-    printk("     pt_base: %p(VA)\n", (void *)si->pt_base); 
-    printk("nr_pt_frames: 0x%lx\n", si->nr_pt_frames);
-    printk("    mfn_list: %p(VA)\n", (void *)si->mfn_list); 
-    printk("   mod_start: 0x%lx(VA)\n", si->mod_start);
-    printk("     mod_len: %lu\n", si->mod_len); 
-    printk("       flags: 0x%x\n", (unsigned int)si->flags);
-    printk("    cmd_line: %s\n",  
-           si->cmd_line ? (const char *)si->cmd_line : "NULL");
-
     /* Set up events. */
     init_events();
-    
-    /* ENABLE EVENT DELIVERY. This is disabled at start of day. */
-    __sti();
 
-    arch_print_info();
+    __sti();
 
     setup_xen_features();
 
@@ -153,24 +126,57 @@ void start_kernel(start_info_t *si)
     /* Init time and timers. */
     init_time();
 
+#if FIXME
     /* Init the console driver. */
     init_console();
+#endif
 
     /* Init grant tables */
     init_gnttab();
-    
+
     /* Init scheduler. */
     init_sched();
  
     /* Init XenBus */
     init_xenbus();
 
+
 #ifdef CONFIG_XENBUS
     create_thread("shutdown", shutdown_thread, NULL);
 #endif
 
+
+	gic_init();
+
+//#define VTIMER_TEST
+#ifdef VTIMER_TEST
+    while(1){
+		int x, y, z;
+    	z = 0;
+    	// counter
+    	__asm__ __volatile__("mrrc p15, 1, %0, %1, c14;isb":"=r"(x), "=r"(y));
+    	printk("Counter: %x-%x\n", x, y);
+
+    	__asm__ __volatile__("mrrc p15, 3, %0, %1, c14;isb":"=r"(x), "=r"(y));
+    	printk("CompareValue: %x-%x\n", x, y);
+
+    	// TimerValue
+    	__asm__ __volatile__("mrc p15, 0, %0, c14, c3, 0;isb":"=r"(x));
+    	printk("TimerValue: %x\n", x);
+
+    	// control register
+    	__asm__ __volatile__("mrc p15, 0, %0, c14, c3, 1;isb":"=r"(x));
+    	printk("ControlRegister: %x\n", x);
+    	while(z++ < 0xfffff){}
+    }
+#endif
+
     /* Call (possibly overridden) app_main() */
+#if defined(__arm__) || defined(__aarch64__)
+    app_main(NULL);
+#else
     app_main(&start_info);
+#endif
 
     /* Everything initialised, start idle thread */
     run_idle_thread();
@@ -182,14 +188,18 @@ void stop_kernel(void)
 
     local_irq_disable();
 
+#if 0
     /* Reset grant tables */
     fini_gnttab();
+#endif
 
     /* Reset XenBus */
     fini_xenbus();
 
+#if 0
     /* Reset timers */
     fini_time();
+#endif
 
     /* Reset memory management. */
     fini_mm();
@@ -197,12 +207,11 @@ void stop_kernel(void)
     /* Reset events. */
     fini_events();
 
-    /* Reset traps */
-    trap_fini();
-
     /* Reset arch details */
     arch_fini();
 }
+
+void arch_do_exit(void);
 
 /*
  * do_exit: This is called whenever an IRET fails in entry.S.
@@ -214,7 +223,7 @@ void stop_kernel(void)
 void do_exit(void)
 {
     printk("Do_exit called!\n");
-    stack_walk();
+    arch_do_exit();
     for( ;; )
     {
         struct sched_shutdown sched_shutdown = { .reason = SHUTDOWN_crash };

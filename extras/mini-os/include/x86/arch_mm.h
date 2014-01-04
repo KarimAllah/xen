@@ -25,6 +25,8 @@
 #ifndef _ARCH_MM_H_
 #define _ARCH_MM_H_
 
+extern char *stack;
+
 #ifndef __ASSEMBLY__
 #include <xen/xen.h>
 #if defined(__i386__)

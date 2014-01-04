@@ -320,7 +320,8 @@ cpu_init_done:
 
         ldr   r1, =paging            /* Explicit vaddr, not RIP-relative */
         mrc   CP32(r0, HSCTLR)
-        orr   r0, r0, #(SCTLR_M|SCTLR_C) /* Enable MMU and D-cache */
+        @orr   r0, r0, #(SCTLR_M|SCTLR_C) /* Enable MMU and D-cache */
+        orr   r0, r0, #(SCTLR_M) /* Enable MMU and D-cache */
         dsb                          /* Flush PTE writes and finish reads */
         mcr   CP32(r0, HSCTLR)       /* now paging is enabled */
         isb                          /* Now, flush the icache */

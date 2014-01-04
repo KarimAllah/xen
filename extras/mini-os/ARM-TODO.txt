@@ -1,0 +1,19 @@
+* os.h bit manipulation, write optimized assembly code
+* support abort exception handling ( and others )
+* scheduling!
+* use proper memory types and enable caches (L1 and L2)
+* Use LDREX and STREX in xchg implementation ( code already there but it causes an abort, I think because of using strong-ordered memory with disabled L1 caches - something to do with the implementation of the monitor on cortex-a7 )
+* gic request_irq implementation, currently all IRQs all hardcoded in gic irq handler.
+* use device tree instead of the currently hardcoded values ( already included libfdt in the sources ${mini-os}/lib/fdt, need a higher level wrapper for that )
+* Add virtual memory support and make vstart = 0 ( use 4k descriptors instead of 1M descriptors )
+* sched
+* fini_gnttab
+* fini_time
+* bind_*
+* add multiple cpu support (?)
+* map_frames
+* clean up the code and remove redundent code between arm and x86
+* Check whether x86_{32-64} are still working :)
+* remove start_info structure from the common code and remove "#define XEN_HAVE_PV_GUEST_ENTRY 1" from public/xen.h
+* make sure that wallclock is functioning properly
+* console support

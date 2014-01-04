@@ -213,21 +213,25 @@ static void init_page_allocator(unsigned long min, unsigned long max)
     min = round_pgup  (min);
     max = round_pgdown(max);
 
+
     /* Allocate space for the allocation bitmap. */
-    bitmap_size  = (max+1) >> (PAGE_SHIFT+3);
+    bitmap_size  = (max - min + 1) >> (PAGE_SHIFT+3);
     bitmap_size  = round_pgup(bitmap_size);
     alloc_bitmap = (unsigned long *)to_virt(min);
     min         += bitmap_size;
     range        = max - min;
+
 
     /* All allocated by default. */
     memset(alloc_bitmap, ~0, bitmap_size);
     /* Free up the memory we've been given to play with. */
     map_free(PHYS_PFN(min), range>>PAGE_SHIFT);
 
+
     /* The buddy lists are addressed in high memory. */
     min = (unsigned long) to_virt(min);
     max = (unsigned long) to_virt(max);
+
 
     while ( range != 0 )
     {
@@ -237,7 +241,6 @@ static void init_page_allocator(unsigned long min, unsigned long max)
          */
         for ( i = PAGE_SHIFT; (1UL<<(i+1)) <= range; i++ )
             if ( min & (1UL<<i) ) break;
-
 
         ch = (chunk_head_t *)min;
         min   += (1UL<<i);
@@ -399,19 +402,20 @@ void *sbrk(ptrdiff_t increment)
 
 void init_mm(void)
 {
-
     unsigned long start_pfn, max_pfn;
-
     printk("MM: Init\n");
 
     arch_init_mm(&start_pfn, &max_pfn);
     /*
      * now we can initialise the page allocator
      */
-    printk("MM: Initialise page allocator for %lx(%lx)-%lx(%lx)\n",
-           (u_long)to_virt(PFN_PHYS(start_pfn)), PFN_PHYS(start_pfn), 
-           (u_long)to_virt(PFN_PHYS(max_pfn)), PFN_PHYS(max_pfn));
+    //FIXME: Doesn't print correct value!
+    printk("MM: Initialise page allocator for %lx(%lx) - %lx(%lx)\n",
+           to_virt(PFN_PHYS(start_pfn)), PFN_PHYS(start_pfn),
+           to_virt(PFN_PHYS(max_pfn)), PFN_PHYS(max_pfn));
+
     init_page_allocator(PFN_PHYS(start_pfn), PFN_PHYS(max_pfn));
+
     printk("MM: done\n");
 
     arch_init_p2m(max_pfn);

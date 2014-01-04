@@ -212,7 +212,7 @@ void block_domain(s_time_t until)
 
 
 /*
- * Just a dummy 
+ * Just a dummy
  */
 static void timer_handler(evtchn_port_t ev, struct pt_regs *regs, void *ign)
 {
@@ -223,14 +223,14 @@ static void timer_handler(evtchn_port_t ev, struct pt_regs *regs, void *ign)
 
 
 static evtchn_port_t port;
-void init_time(void)
+void arch_init_time(void)
 {
     printk("Initialising timer interface\n");
     port = bind_virq(VIRQ_TIMER, &timer_handler, NULL);
     unmask_evtchn(port);
 }
 
-void fini_time(void)
+void arch_fini_time(void)
 {
     /* Clear any pending timer */
     HYPERVISOR_set_timer_op(0);

@@ -64,12 +64,25 @@ extern shared_info_t *HYPERVISOR_shared_info;
 void trap_init(void);
 void trap_fini(void);
 
-void arch_init(start_info_t *si);
-void arch_print_info(void);
 void arch_fini(void);
 
 
+static inline void force_evtchn_callback(void)
+{
+    int save;
+    vcpu_info_t *vcpu;
+    vcpu = &HYPERVISOR_shared_info->vcpu_info[smp_processor_id()];
+    save = vcpu->evtchn_upcall_mask;
 
+    while (vcpu->evtchn_upcall_pending) {
+        vcpu->evtchn_upcall_mask = 1;
+        barrier();
+        do_hypervisor_callback(NULL);
+        barrier();
+        vcpu->evtchn_upcall_mask = save;
+        barrier();
+    };
+}
 
 
 /* 
@@ -285,7 +298,7 @@ static inline void clear_bit(int nr, volatile unsigned long * addr)
  */
 static inline unsigned long __ffs(unsigned long word)
 {
-	__asm__("bsfl %1,%0"
+	__asm__("clz %0,%1"
 		:"=r" (word)
 		:"rm" (word));
 	return word;

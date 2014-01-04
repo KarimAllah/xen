@@ -225,4 +225,47 @@ int ffs(int i)
    return 0;
 }
 
+void *memchr(const void *s, int c, size_t n)
+{
+        if (n != 0) {
+                const unsigned char *p = s;
+
+                do {
+                        if (*p++ == (unsigned char)c)
+                                return ((void *)(uintptr_t)(p - 1));
+                } while (--n != 0);
+        }
+        return (NULL);
+}
+
+
+//FIXME Stolen from xen code (incompatible licenses)
+/**
+ * memmove - Copy one area of memory to another
+ * @dest: Where to copy to
+ * @src: Where to copy from
+ * @count: The size of the area.
+ *
+ * Unlike memcpy(), memmove() copes with overlapping areas.
+ */
+void * memmove(void * dest,const void *src,size_t count)
+{
+	char *tmp, *s;
+
+	if (dest <= src) {
+		tmp = (char *) dest;
+		s = (char *) src;
+		while (count--)
+			*tmp++ = *s++;
+		}
+	else {
+		tmp = (char *) dest + count;
+		s = (char *) src + count;
+		while (count--)
+			*--tmp = *--s;
+		}
+
+	return dest;
+}
+
 #endif

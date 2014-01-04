@@ -71,23 +71,6 @@ void do_hypervisor_callback(struct pt_regs *regs)
     in_callback = 0;
 }
 
-void force_evtchn_callback(void)
-{
-    int save;
-    vcpu_info_t *vcpu;
-    vcpu = &HYPERVISOR_shared_info->vcpu_info[smp_processor_id()];
-    save = vcpu->evtchn_upcall_mask;
-
-    while (vcpu->evtchn_upcall_pending) {
-        vcpu->evtchn_upcall_mask = 1;
-        barrier();
-        do_hypervisor_callback(NULL);
-        barrier();
-        vcpu->evtchn_upcall_mask = save;
-        barrier();
-    };
-}
-
 inline void mask_evtchn(uint32_t port)
 {
     shared_info_t *s = HYPERVISOR_shared_info;
@@ -110,8 +93,7 @@ inline void unmask_evtchn(uint32_t port)
               &vcpu_info->evtchn_pending_sel) )
     {
         vcpu_info->evtchn_upcall_pending = 1;
-        if ( !vcpu_info->evtchn_upcall_mask )
-            force_evtchn_callback();
+        force_evtchn_callback();
     }
 }
 
