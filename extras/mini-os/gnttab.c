@@ -19,6 +19,7 @@
 #include <mini-os/mm.h>
 #include <mini-os/gnttab.h>
 #include <mini-os/semaphore.h>
+#include <mini-os/hypervisor.h>
 
 #define NR_RESERVED_ENTRIES 8
 

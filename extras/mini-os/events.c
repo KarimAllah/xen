@@ -138,7 +138,8 @@ evtchn_port_t bind_virq(uint32_t virq, evtchn_handler_t handler, void *data)
 	op.virq = virq;
 	op.vcpu = smp_processor_id();
 
-	if ( (rc = HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &op)) != 0 )
+	rc = HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &op);
+	if (rc != 0)
 	{
 		printk("Failed to bind virtual IRQ %d with rc=%d\n", virq, rc);
 		return -1;
@@ -166,44 +167,30 @@ evtchn_port_t bind_pirq(uint32_t pirq, int will_share,
 	return op.port;
 }
 
-#if defined(__x86_64__)
-char irqstack[2 * STACK_SIZE];
-
-static struct pda
-{
-    int irqcount;       /* offset 0 (used in x86_64.S) */
-    char *irqstackptr;  /*        8 */
-} cpu0_pda;
-#endif
-
+void arch_init_events(void);
 /*
  * Initially all events are without a handler and disabled
  */
 void init_events(void)
 {
     int i;
-#if defined(__x86_64__)
-    asm volatile("movl %0,%%fs ; movl %0,%%gs" :: "r" (0));
-    wrmsrl(0xc0000101, &cpu0_pda); /* 0xc0000101 is MSR_GS_BASE */
-    cpu0_pda.irqcount = -1;
-    cpu0_pda.irqstackptr = (void*) (((unsigned long)irqstack + 2 * STACK_SIZE)
-                                    & ~(STACK_SIZE - 1));
-#endif
+
     /* initialize event handler */
     for ( i = 0; i < NR_EVS; i++ )
 	{
         ev_actions[i].handler = default_handler;
         mask_evtchn(i);
     }
+
+    arch_init_events();
 }
 
+void arch_fini_events(void);
 void fini_events(void)
 {
     /* Dealloc all events */
     unbind_all_ports();
-#if defined(__x86_64__)
-    wrmsrl(0xc0000101, NULL); /* 0xc0000101 is MSR_GS_BASE */
-#endif
+    arch_fini_events();
 }
 
 void default_handler(evtchn_port_t port, struct pt_regs *regs, void *ignore)
@@ -261,7 +248,8 @@ int evtchn_bind_interdomain(domid_t pal, evtchn_port_t remote_port,
 
 int evtchn_get_peercontext(evtchn_port_t local_port, char *ctx, int size)
 {
-    int rc;
+    int rc = 0;
+#if 0
     uint32_t sid;
     struct xen_flask_op op;
     op.cmd = FLASK_GET_PEER_SID;
@@ -276,6 +264,7 @@ int evtchn_get_peercontext(evtchn_port_t local_port, char *ctx, int size)
     op.u.sid_context.size = size;
     set_xen_guest_handle(op.u.sid_context.context, ctx);
     rc = _hypercall1(int, xsm_op, &op);
+#endif
     return rc;
 }
 

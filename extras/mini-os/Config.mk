@@ -12,6 +12,8 @@ export XEN_INTERFACE_VERSION
 # If not x86 then use $(XEN_TARGET_ARCH)
 ifeq ($(findstring x86_,$(XEN_TARGET_ARCH)),x86_)
 TARGET_ARCH_FAM = x86
+else ifeq ($(findstring arm,$(XEN_TARGET_ARCH)),arm)
+TARGET_ARCH_FAM = arm
 else
 TARGET_ARCH_FAM = $(XEN_TARGET_ARCH)
 endif

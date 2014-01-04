@@ -27,6 +27,7 @@
 #include <mini-os/wait.h>
 #include <xen/io/xs_wire.h>
 #include <mini-os/spinlock.h>
+#include <mini-os/hypervisor.h>
 #include <mini-os/xmalloc.h>
 
 #define min(x,y) ({                       \
@@ -35,6 +36,7 @@
         tmpx < tmpy ? tmpx : tmpy;            \
         })
 
+#define XENBUS_DEBUG
 #ifdef XENBUS_DEBUG
 #define DEBUG(_f, _a...) \
     printk("MINI_OS(file=xenbus.c, line=%d) " _f , __LINE__, ## _a)
@@ -43,6 +45,7 @@
 #endif
 
 static struct xenstore_domain_interface *xenstore_buf;
+static uint32_t store_evtchn;
 static DECLARE_WAIT_QUEUE_HEAD(xb_waitq);
 DECLARE_WAIT_QUEUE_HEAD(xenbus_watch_queue);
 
@@ -272,11 +275,12 @@ static void xenbus_thread_func(void *ign)
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 				  void *ign)
 {
+	printk("[%s]\n", __func__);
     wake_up(&xb_waitq);
 }
 
 static int nr_live_reqs;
-static spinlock_t req_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(req_lock);
 static DECLARE_WAIT_QUEUE_HEAD(req_wq);
 
 /* Release a xenbus identifier */
@@ -325,20 +329,23 @@ static int allocate_xenbus_id(void)
     return o_probe;
 }
 
+void arch_init_xenbus(struct xenstore_domain_interface **xenstore_buf, uint32_t *store_evtchn);
+
 /* Initialise xenbus. */
 void init_xenbus(void)
 {
     int err;
     DEBUG("init_xenbus called.\n");
-    xenstore_buf = mfn_to_virt(start_info.store_mfn);
+
+    arch_init_xenbus(&xenstore_buf, &store_evtchn);
+
     create_thread("xenstore", xenbus_thread_func, NULL);
     DEBUG("buf at %p.\n", xenstore_buf);
-    err = bind_evtchn(start_info.store_evtchn,
+    err = bind_evtchn(store_evtchn,
 		      xenbus_evtchn_handler,
               NULL);
-    unmask_evtchn(start_info.store_evtchn);
-    printk("xenbus initialised on irq %d mfn %#lx\n",
-	   err, start_info.store_mfn);
+    unmask_evtchn(store_evtchn);
+    printk("xenbus initialised on event %d\n", err);
 }
 
 void fini_xenbus(void)
@@ -420,7 +427,7 @@ static void xb_write(int type, int req_id, xenbus_transaction_t trans_id,
     xenstore_buf->req_prod += len;
 
     /* Send evtchn to notify remote */
-    notify_remote_via_evtchn(start_info.store_evtchn);
+    notify_remote_via_evtchn(store_evtchn);
 }
 
 /* Send a mesasge to xenbus, in the same fashion as xb_write, and
@@ -445,6 +452,7 @@ xenbus_msg_reply(int type,
     remove_waiter(w, req_info[id].waitq);
     wake(current);
 
+    rmb();
     rep = req_info[id].reply;
     BUG_ON(rep->req_id != id);
     release_xenbus_id(id);

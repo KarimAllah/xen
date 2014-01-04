@@ -32,6 +32,8 @@
 #if defined(__i386__) || defined(__x86_64__)
 #include "arch-x86/xen.h"
 #elif defined(__arm__) || defined (__aarch64__)
+//FIXME:Remove later
+#define XEN_HAVE_PV_GUEST_ENTRY 1
 #include "arch-arm.h"
 #else
 #error "Unsupported architecture"

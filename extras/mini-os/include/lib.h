@@ -76,7 +76,6 @@ int	 memcmp(const void *b1, const void *b2, size_t len);
 char	*strcat(char * __restrict, const char * __restrict);
 int	 strcmp(const char *, const char *);
 char	*strcpy(char * __restrict, const char * __restrict);
-
 char	*strdup(const char *__restrict);
 
 size_t	 strlen(const char *);
@@ -86,6 +85,7 @@ char	*strncpy(char * __restrict, const char * __restrict, size_t);
 
 char	*strstr(const char *, const char *);
 
+void * memmove(void * dest,const void *src,size_t count);
 void *memset(void *, int, size_t);
 
 char *strchr(const char *p, int ch);
@@ -96,6 +96,7 @@ char *strrchr(const char *p, int ch);
  * $FreeBSD$
  */
 void	*memcpy(void *to, const void *from, size_t len);
+void *memchr(const void *s, int c, size_t n);
 
 size_t strnlen(const char *, size_t);
 #endif
