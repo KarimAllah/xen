@@ -17,3 +17,5 @@
 * remove start_info structure from the common code and remove "#define XEN_HAVE_PV_GUEST_ENTRY 1" from public/xen.h
 * make sure that wallclock is functioning properly
 * console support
+* evtchn_get_peercontext
+* stop kernel
