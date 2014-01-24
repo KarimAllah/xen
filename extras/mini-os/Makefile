@@ -195,7 +195,7 @@ $(OBJ_DIR)/$(TARGET): links include/list.h $(OBJS) $(APP_O) arch_lib
 	$(OBJCOPY) -w -G $(GLOBAL_PREFIX)* -G _start $@.o $@.o
 	$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) $@.o $(EXTRA_OBJS) -o $@
 	#gzip -f -9 -c $@ >$@.gz
-	objcopy -O binary $@ $@.img
+	$(OBJCOPY) -O binary $@ $@.img
 
 .PHONY: clean arch_clean
 
