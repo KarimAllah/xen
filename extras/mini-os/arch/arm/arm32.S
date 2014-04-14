@@ -8,85 +8,72 @@ _start:
 .rept   8
         mov     r0, r0
 .endr
-        b       1f
+        b       reset
         .word   0x016f2818      @ Magic numbers to help the loader
         .word   _start		@ absolute load/run zImage address
         .word   _end - _start   @ zImage size
 	@ end of zImage header
 
+@ Called at boot time. Sets up MMU, exception vectors and stack, and then calls C setup() function.
+@ => r2 -> DTB
+@ <= never returns
+reset:
+	@ Fill in the top-level translation table (at page_dir). Based on Mini-OS code.
+	@ Populate the whole pagedir with 1MB section descriptors.
+	@ TEX[2:0] C B = 001 1 1 (outer and inner write-back, write-allocate)
+	ldr	r0, =(0x2 +  		/* Section entry */ \
+		      0xc +  		/* C B */ \
+		      (3 << 10) + 	/* Read/write */ \
+		      (1 << 12) +	/* TEX */ \
+		      (1 << 16) +	/* Sharable */ \
+		      (1<<19))		/* Non-secure */
+	ldr	r1, =page_dir
+	add	r3, r1, #4*4*1024	@ Limit (4 GB address space, 4 byte entries)
+
 1:
-#if FIXME
-@ core processor specific initialization
-	@ Initialize ACTLR core register
-	mrc p15, 0, <Rt>, c1, c0, 1
-	mcr p15, 0, <Rt>, c1, c0, 1
-#endif
+	str	r0, [r1],#4		@ write the section entry
+	add	r0, r0, #1 << 20 	@ next physical page
+	cmp	r1, r3
+	bne	1b
 
-@ Save dtb pointer passed by the hypervisor
-	mov	r4, r2		@ save dtb pointer
-
-@ Build pagetables
-	bl	build_pagetables
-
-	ldr	r2, =page_dir
-	MCR	p15, 0, r2, c2, c0, 0	@ set ttbr0
+	@ Tell the system where our new table is located.
+	ldr	r3, =page_dir
+	mcr	p15, 0, r3, c2, c0, 0	@ set ttbr0
 
 	@ Set access permission for domains
-	mov	r0, #0x3
-	MCR	p15, 0, r0, c3, c0, 0
+	@ Domains are deprecated, but we have to configure them anyway.
+	@ We mark every page as being domain 0 and set domain 0 to "client mode"
+	@ (client mod = use access flags in page table).
+	mov	r0, #1			@ 1 = client
+	mcr	p15, 0, r0, c3, c0, 0	@ DACR
+
+	@ Invalidate TLB
+	mcr	p15, 0, r1, c8, c7, 0	@ TLBIALL
+
+	@ Enable MMU / SCTLR
+	mrc	p15, 0, r1, c1, c0, 0	@ SCTLR
+	orr	r1, r1, #0x7		@ (dcache, barriers, MMU)
+	orr	r1, r1, #3 << 11	@ (icache, branch prediction)
+	mcr	p15, 0, r1, c1, c0, 0	@ SCTLR
 	isb
-	
-	ldr	r0, =mmu_switched
 
-	@ enable mmu / sctlr
-	mrc	p15, 0, r1, c1, c0, 0	@ read sctlr
-	orr	r1, r1, #0x1		@ enable mmu
-	@orr	r1, r1, #0x4		@ enable cache
-	orr	r1, r1, #0x02		@ enable barrier enable
-	@mcr	p15, 0, r1, c1, c0, 0	@ write sctlr
-	isb
-
-	@ jump to the virtual address now
-	mov	pc, r0
-
-@ If we're here, then we're very lucky
-mmu_switched:
-
-@ set VBAR = exception_vector_table
+	@ Set VBAR -> exception_vector_table
 	@ SCTLR.V = 0
 	adr	r0, exception_vector_table
 	mcr	p15, 0, r0, c12, c0, 0
 
-@ load stack
-	ldr	sp, =stack
-	add	sp, sp, #(4*4*1024)
+	@ Initialise 16 KB stack
+	ldr	sp, =stack_end
 
-
-	mov	r0, r4		@ set r0 = dtb pointer
+	mov	r0, r2			@ C wants the DTB pointer in r0
 	b	arch_init
-
-
-@ Populate the whole pagedir with 1MB section descriptors for now (1-1 mapping)
-build_pagetables:
-	ldr	r0, =(0x2 + (1 << 16) + (1<<19)) @ First section entry (sharable + NS ).
-	ldr	r1, =page_dir
-	add	r2, r1, #(4*4*1024) @ Limit
-
-1:
-	str	r0, [r1] @ write the section entry
-
-	add	r0, r0, #(1 << 20) @ next physical page.
-	add	r1, r1, #4 @ next pagedir entry
-	cmp	r1, r2
-	bne	1b
-
-	mov	pc, lr
 
 .pushsection .data
 .align 13
 .globl stack
 stack:
 	.fill (4*1024), 4, 0x0
+stack_end:
 .align 13
 irqstack:
 	.fill (1024), 4, 0x0
