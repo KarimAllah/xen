@@ -36,7 +36,7 @@
         tmpx < tmpy ? tmpx : tmpy;            \
         })
 
-#define XENBUS_DEBUG
+/* #define XENBUS_DEBUG */
 #ifdef XENBUS_DEBUG
 #define DEBUG(_f, _a...) \
     printk("MINI_OS(file=xenbus.c, line=%d) " _f , __LINE__, ## _a)
@@ -275,7 +275,7 @@ static void xenbus_thread_func(void *ign)
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 				  void *ign)
 {
-	printk("[%s]\n", __func__);
+    /* printk("[%s]\n", __func__); */
     wake_up(&xb_waitq);
 }
 
