@@ -28,7 +28,7 @@ extern char stack[];
 #define virt_to_mfn(_virt)         (0)
 #define mach_to_virt(_mach)        (0)
 #define virt_to_mach(_virt)        (0)
-#define mfn_to_virt(_mfn)          (0)
+#define mfn_to_virt(_mfn)          (to_virt(PFN_PHYS(_mfn)))
 #define pfn_to_virt(_pfn)          (to_virt(PFN_PHYS(_pfn)))
 
 // FIXME
