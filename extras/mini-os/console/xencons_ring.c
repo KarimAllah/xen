@@ -7,6 +7,7 @@
 #include <mini-os/lib.h>
 #include <mini-os/xenbus.h>
 #include <xen/io/console.h>
+#include <xen/hvm/params.h>
 #include <xen/io/protocols.h>
 #include <xen/io/ring.h>
 #include <mini-os/xmalloc.h>
@@ -14,6 +15,21 @@
 #include "console.h"
 
 DECLARE_WAIT_QUEUE_HEAD(console_queue);
+
+static inline int hvm_get_parameter(int idx, uint64_t *value)
+{
+	struct xen_hvm_param xhv;
+	int ret;
+
+	xhv.domid = DOMID_SELF;
+	xhv.index = idx;
+	ret = HYPERVISOR_hvm_op(HVMOP_get_param, &xhv);
+	if (ret < 0) {
+		BUG();
+	}
+	*value = xhv.value;
+	return ret;
+}
 
 static inline void notify_daemon(struct consfront_dev *dev)
 {
@@ -30,32 +46,32 @@ static inline struct xencons_interface *xencons_interface(void)
         return mfn_to_virt(start_info.console.domU.mfn);
     else
         return NULL;
-} 
- 
+}
+
 int xencons_ring_send_no_notify(struct consfront_dev *dev, const char *data, unsigned len)
-{	
+{
     int sent = 0;
-	struct xencons_interface *intf;
-	XENCONS_RING_IDX cons, prod;
+    struct xencons_interface *intf;
+    XENCONS_RING_IDX cons, prod;
 
-	if (!dev)
-            intf = xencons_interface();
-        else
-            intf = dev->ring;
-        if (!intf)
-            return sent;
+    if (!dev)
+        intf = xencons_interface();
+    else
+        intf = dev->ring;
+    if (!intf)
+        return sent;
 
-	cons = intf->out_cons;
-	prod = intf->out_prod;
-	mb();
-	BUG_ON((prod - cons) > sizeof(intf->out));
+    cons = intf->out_cons;
+    prod = intf->out_prod;
+    mb();
+    BUG_ON((prod - cons) > sizeof(intf->out));
 
-	while ((sent < len) && ((prod - cons) < sizeof(intf->out)))
-		intf->out[MASK_XENCONS_IDX(prod++, intf->out)] = data[sent++];
+    while ((sent < len) && ((prod - cons) < sizeof(intf->out)))
+        intf->out[MASK_XENCONS_IDX(prod++, intf->out)] = data[sent++];
 
-	wmb();
-	intf->out_prod = prod;
-    
+    wmb();
+    intf->out_prod = prod;
+
     return sent;
 }
 
@@ -67,9 +83,7 @@ int xencons_ring_send(struct consfront_dev *dev, const char *data, unsigned len)
     notify_daemon(dev);
 
     return sent;
-}	
-
-
+}
 
 void console_handle_input(evtchn_port_t port, struct pt_regs *regs, void *data)
 {
@@ -157,8 +171,14 @@ struct consfront_dev *xencons_ring_init(void)
 {
 	int err;
 	struct consfront_dev *dev;
+	uint64_t v = -1;
+	evtchn_port_t evtchn;
 
-	if (!start_info.console.domU.evtchn)
+	hvm_get_parameter(HVM_PARAM_CONSOLE_EVTCHN, &v);
+	evtchn = v;
+	/* printk("Console is on port %d\n", evtchn); */
+
+	if (!evtchn)
 		return 0;
 
 	dev = malloc(sizeof(struct consfront_dev));
@@ -171,8 +191,10 @@ struct consfront_dev *xencons_ring_init(void)
 #ifdef HAVE_LIBC
 	dev->fd = -1;
 #endif
-	dev->evtchn = start_info.console.domU.evtchn;
-	dev->ring = (struct xencons_interface *) mfn_to_virt(start_info.console.domU.mfn);
+	dev->evtchn = evtchn;
+	hvm_get_parameter(HVM_PARAM_CONSOLE_PFN, &v);
+	dev->ring = (struct xencons_interface *) mfn_to_virt(v);
+        /* printk("Console ring is at %x\n", dev->ring); */
 
 	err = bind_evtchn(dev->evtchn, console_handle_input, dev);
 	if (err <= 0) {

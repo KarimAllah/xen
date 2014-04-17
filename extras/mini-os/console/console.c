@@ -52,7 +52,7 @@
 
 /* If console not initialised the printk will be sent to xen serial line 
    NOTE: you need to enable verbose in xen/Rules.mk for it to work. */
-static int console_initialised = 0;
+static struct consfront_dev *opt_console_dev = NULL;
 
 __attribute__((weak)) void console_input(char * buf, unsigned len)
 {
@@ -88,7 +88,7 @@ void console_print(struct consfront_dev *dev, char *data, int length)
     int part_len;
     int (*ring_send_fn)(struct consfront_dev *dev, const char *data, unsigned length);
 
-    if(!console_initialised)
+    if(!opt_console_dev)
         ring_send_fn = xencons_ring_send_no_notify;
     else
         ring_send_fn = xencons_ring_send;
@@ -131,11 +131,11 @@ void print(int direct, const char *fmt, va_list args)
         return;
     } else {
 #ifndef USE_XEN_CONSOLE
-    if(!console_initialised)
+        if(!opt_console_dev)
 #endif    
             (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(buf), buf);
         
-        console_print(NULL, buf, strlen(buf));
+        console_print(opt_console_dev, buf, strlen(buf));
     }
 }
 
@@ -143,8 +143,7 @@ void printk(const char *fmt, ...)
 {
     va_list       args;
     va_start(args, fmt);
-    // FIXME switch back to print(0, ...)
-    print(1, fmt, args);
+    print(0, fmt, args);
     va_end(args);        
 }
 
@@ -156,10 +155,9 @@ void xprintk(const char *fmt, ...)
     va_end(args);        
 }
 void init_console(void)
-{   
+{
     printk("Initialising console ... ");
-    xencons_ring_init();    
-    console_initialised = 1;
+    opt_console_dev = xencons_ring_init();
     /* This is also required to notify the daemon */
     printk("done.\n");
 }

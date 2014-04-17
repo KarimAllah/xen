@@ -126,10 +126,8 @@ void start_kernel(void)
     /* Init time and timers. */
     init_time();
 
-#if FIXME
     /* Init the console driver. */
     init_console();
-#endif
 
     /* Init grant tables */
     init_gnttab();
