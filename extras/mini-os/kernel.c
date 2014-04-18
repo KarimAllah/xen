@@ -153,7 +153,7 @@ void start_kernel(void)
 #endif
 
 
-	gic_init();
+    gic_init();
 
 //#define VTIMER_TEST
 #ifdef VTIMER_TEST

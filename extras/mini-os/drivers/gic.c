@@ -6,7 +6,7 @@
 //#define VGIC_DEBUG
 #ifdef VGIC_DEBUG
 #define DEBUG(_f, _a...) \
-    DEBUG("MINI_OS(file=vgic.c, line=%d) " _f , __LINE__, ## _a)
+    printk("MINI_OS(file=gic.c, line=%d) " _f , __LINE__, ## _a)
 #else
 #define DEBUG(_f, _a...)    ((void)0)
 #endif
