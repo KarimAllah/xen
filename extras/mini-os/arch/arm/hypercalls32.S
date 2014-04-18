@@ -86,3 +86,14 @@ _hypercall2(nmi_op);
 _hypercall1(sysctl);
 _hypercall1(domctl);
 _hypercall2(hvm_op);
+
+@ Write a message to the emergency console and halt.
+@ => r1 = message length
+@    r2 -> message
+@ <= never returns
+.globl arm_panic
+arm_panic:
+	mov	r0, #0
+        mov	r12, #__HYPERVISOR_console_io
+        __HVC(XEN_IMM)
+	b	.

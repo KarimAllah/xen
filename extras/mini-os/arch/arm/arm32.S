@@ -84,19 +84,27 @@ shared_info_page:
 .align	14
 page_dir:
 	.fill (4*1024), 4, 0x0
+fault_message:
+	.ascii "Fault!\n"
+fault_message_end:
 
 .popsection
+
+fault:
+	mov	r1, #fault_message_end - fault_message
+	ldr	r2, =fault_message
+	b	arm_panic
 
 @ exception base address
 .align 5
 .globl exception_vector_table
 exception_vector_table:
-	b	. @ reset
-	b	. @ undefined instruction
-	b	. @ supervisor call
-	b	. @ prefetch call
-	b	. @ prefetch abort
-	b	. @ data abort //FIXME CLREX
+	b	fault @ reset
+	b	fault @ undefined instruction
+	b	fault @ supervisor call
+	b	fault @ prefetch call
+	b	fault @ prefetch abort
+	b	fault @ data abort //FIXME CLREX
 	b	irq_handler @ irq
 	b	firq_handler @ firq
 
