@@ -96,7 +96,7 @@ void console_handle_input(evtchn_port_t port, struct pt_regs *regs, void *data)
 
         wake_up(&console_queue);
 #else
-	struct xencons_interface *intf = xencons_interface();
+	struct xencons_interface *intf = dev->ring;
 	XENCONS_RING_IDX cons, prod;
 
 	cons = intf->in_cons;
