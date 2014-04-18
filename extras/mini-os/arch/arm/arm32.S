@@ -84,16 +84,48 @@ shared_info_page:
 .align	14
 page_dir:
 	.fill (4*1024), 4, 0x0
-fault_message:
-	.ascii "Fault!\n"
-fault_message_end:
+fault_dump:
+	.fill 17, 4, 0x0		@ On fault, we save the registers + CPSR here
 
 .popsection
 
 fault:
-	mov	r1, #fault_message_end - fault_message
-	ldr	r2, =fault_message
-	b	arm_panic
+	cpsid	aif			@ Disable interrupts
+
+	ldr	r13, =fault_dump
+	stmia	r13, {r0-r12}		@ Dump the non-banked registers directly (well, unless from FIQ mode)
+	str	r14, [r13, #15 << 2]	@ Our r14 is the faulting r15
+	mov	r0, r13
+
+	@ Save the caller's CPSR (our SPSR) too.
+	mrs	r1, SPSR
+	str	r1, [r13, #16 << 2]
+
+	@ Switch to the mode we came from to get r13 and r14.
+	@ If coming from user mode, use System mode instead so we're still
+	@ privileged.
+	and	r1, r1, #0x1f		@ r1 = SPSR mode
+	cmp	r1, #0x10		@ If from User mode
+	moveq	r1, #0x1f		@ Then use System mode instead
+
+	mrs	r3, CPSR		@ r3 = our CPSR
+	bic	r2, r3, #0x1f
+	orr	r2, r2, r1
+	msr	CPSR, r2		@ Change to mode r1
+
+	@ Save old mode's r13, r14
+	str	r13, [r0, #13 << 2]
+	str	r14, [r0, #14 << 2]
+
+	msr	CPSR, r3		@ Back to fault mode
+
+	@ Call C code to format the register dump.
+	@ Clobbers the stack, but we're not going to return anyway.
+	ldr	r13, =stack_end
+	bl	dump_registers
+1:
+	wfi
+	b	1b
 
 @ exception base address
 .align 5
