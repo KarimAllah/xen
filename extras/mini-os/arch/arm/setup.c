@@ -3,6 +3,7 @@
 #include <xen/memory.h>
 #include <hypervisor.h>
 #include <arm/arch_mm.h>
+#include <libfdt.h>
 
 /*
  * This structure contains start-of-day info, such as pagetable base pointer,
@@ -20,18 +21,27 @@ extern char shared_info_page[PAGE_SIZE];
 
 void start_kernel(void);
 
+void *device_tree;
+
 /*
  * INITIAL C ENTRY POINT.
  */
 void arch_init(void *dtb_pointer)
 {
-    struct xen_add_to_physmap xatp;
+	struct xen_add_to_physmap xatp;
 
-    memset(&__bss_start, 0, &_end - &__bss_start);
+	memset(&__bss_start, 0, &_end - &__bss_start);
 
-    printk("dtb_pointer : %x\n", dtb_pointer);
+	printk("Checking DTB at %x...\n", dtb_pointer);
 
-    /* Map shared_info page */
+	int r;
+	if ((r = fdt_check_header(dtb_pointer))) {
+		printk("Invalid DTB from Xen: %s\n", fdt_strerror(r));
+		BUG();
+	}
+	device_tree = dtb_pointer;
+
+	/* Map shared_info page */
 	xatp.domid = DOMID_SELF;
 	xatp.idx = 0;
 	xatp.space = XENMAPSPACE_shared_info;
