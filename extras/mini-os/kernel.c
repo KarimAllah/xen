@@ -120,58 +120,6 @@ void dump_registers(int *saved_registers) {
 
 void gic_init(void);
 
-static void test_memory(void) {
-	uint32_t *prev = NULL;
-	int i;
-
-	int size = 4096 * 1024;
-	for (;;) {
-		uint32_t *block = malloc(size);
-
-		printk("malloc(%d) -> %p\n", size, block);
-
-		if (!block) {
-			size >>= 1;
-			if (size < 8) {
-				printk("out of memory\n");
-				break;
-			}
-		} else {
-			/* Add to linked list. */
-			block[0] = (int) prev;
-			block[1] = size;
-			prev = block;
-
-			/* Fill the remaining words of the page with their addresses. */
-			for (i = 2; i < size / 4; i++) {
-				block[i] = (uint32_t) (block + i);
-			}
-		}
-	}
-
-	printk("Checking...");
-
-	while (prev) {
-		uint32_t *block = prev;
-		int size = block[1];
-		prev = (uint32_t *) block[0];
-
-		printk("Checking block at %p\n", block);
-
-		for (i = 2; i < size / 4; i++) {
-			uint32_t expected = (uint32_t) (block + i);
-			if (block[i] != expected) {
-				printk("Corrupted: got %p at %p!\n", block[i], expected);
-				BUG();
-			}
-		}
-
-		free(block);
-	}
-
-	printk("Memory test done\n");
-}
-
 void start_kernel(void)
 {
     /* Set up events. */
@@ -206,8 +154,6 @@ void start_kernel(void)
 
 
     gic_init();
-
-    if (0) test_memory();
 
 //#define VTIMER_TEST
 #ifdef VTIMER_TEST

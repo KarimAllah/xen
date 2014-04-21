@@ -52,13 +52,21 @@
 /*********************
  * ALLOCATION BITMAP
  *  One bit per page of memory. Bit set => page is allocated.
+ * Note: the first entry in alloc_bitmap corresponds to the address of alloc_bitmap itself (and is therefore never used).
+ * alloc_bitmap is page aligned.
  */
 
 static unsigned long *alloc_bitmap;
 #define PAGES_PER_MAPWORD (sizeof(unsigned long) * 8)
 
-#define allocated_in_map(_pn) \
-(alloc_bitmap[(_pn)/PAGES_PER_MAPWORD] & (1UL<<((_pn)&(PAGES_PER_MAPWORD-1))))
+/** Convert a physical page number to the number of the page relative to the heap base. */
+#define PAGE_INDEX(pg) ((pg) - (((unsigned long) alloc_bitmap)>>PAGE_SHIFT))
+
+static inline int allocated_in_map(int pn)
+{
+    int i = PAGE_INDEX(pn);
+    return alloc_bitmap[i] & (1UL << (i & (PAGES_PER_MAPWORD - 1)));
+}
 
 /*
  * Hint regarding bitwise arithmetic in map_{alloc,free}:
@@ -72,11 +80,12 @@ static unsigned long *alloc_bitmap;
 static void map_alloc(unsigned long first_page, unsigned long nr_pages)
 {
     unsigned long start_off, end_off, curr_idx, end_idx;
+    int start_index = PAGE_INDEX(first_page);
 
-    curr_idx  = first_page / PAGES_PER_MAPWORD;
-    start_off = first_page & (PAGES_PER_MAPWORD-1);
-    end_idx   = (first_page + nr_pages) / PAGES_PER_MAPWORD;
-    end_off   = (first_page + nr_pages) & (PAGES_PER_MAPWORD-1);
+    curr_idx  = start_index / PAGES_PER_MAPWORD;
+    start_off = start_index & (PAGES_PER_MAPWORD-1);
+    end_idx   = (start_index + nr_pages) / PAGES_PER_MAPWORD;
+    end_off   = (start_index + nr_pages) & (PAGES_PER_MAPWORD-1);
 
     if ( curr_idx == end_idx )
     {
@@ -94,11 +103,12 @@ static void map_alloc(unsigned long first_page, unsigned long nr_pages)
 static void map_free(unsigned long first_page, unsigned long nr_pages)
 {
     unsigned long start_off, end_off, curr_idx, end_idx;
+    int start_index = PAGE_INDEX(first_page);
 
-    curr_idx = first_page / PAGES_PER_MAPWORD;
-    start_off = first_page & (PAGES_PER_MAPWORD-1);
-    end_idx   = (first_page + nr_pages) / PAGES_PER_MAPWORD;
-    end_off   = (first_page + nr_pages) & (PAGES_PER_MAPWORD-1);
+    curr_idx = start_index / PAGES_PER_MAPWORD;
+    start_off = start_index & (PAGES_PER_MAPWORD-1);
+    end_idx   = (start_index + nr_pages) / PAGES_PER_MAPWORD;
+    end_off   = (start_index + nr_pages) & (PAGES_PER_MAPWORD-1);
 
     if ( curr_idx == end_idx )
     {
@@ -398,6 +408,57 @@ void *sbrk(ptrdiff_t increment)
 }
 #endif
 
+static void test_memory(void) {
+	uint32_t *prev = NULL;
+	int i;
+
+	int size = 4096 * 1024;
+	for (;;) {
+		uint32_t *block = malloc(size);
+
+		printk("malloc(%d) -> %p\n", size, block);
+
+		if (!block) {
+			size >>= 1;
+			if (size < 8) {
+				printk("out of memory\n");
+				break;
+			}
+		} else {
+			/* Add to linked list. */
+			block[0] = (int) prev;
+			block[1] = size;
+			prev = block;
+
+			/* Fill the remaining words of the page with their addresses. */
+			for (i = 2; i < size / 4; i++) {
+				block[i] = (uint32_t) (block + i);
+			}
+		}
+	}
+
+	printk("Checking...\n");
+
+	while (prev) {
+		uint32_t *block = prev;
+		int size = block[1];
+		prev = (uint32_t *) block[0];
+
+		printk("Checking block at %p (size = %d)\n", block, size);
+
+		for (i = 2; i < size / 4; i++) {
+			uint32_t expected = (uint32_t) (block + i);
+			if (block[i] != expected) {
+				printk("Corrupted: got %p at %p!\n", block[i], expected);
+				BUG();
+			}
+		}
+
+		free(block);
+	}
+
+	printk("Memory test passed\n");
+}
 
 
 void init_mm(void)
@@ -420,6 +481,8 @@ void init_mm(void)
     arch_init_p2m(max_pfn);
     
     arch_init_demand_mapping_area(max_pfn);
+
+    test_memory();
 }
 
 void fini_mm(void)
