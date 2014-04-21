@@ -421,7 +421,6 @@ static void test_memory(void) {
 		if (!block) {
 			size >>= 1;
 			if (size < 8) {
-				printk("out of memory\n");
 				break;
 			}
 		} else {
