@@ -85,9 +85,15 @@ void arch_init_mm(unsigned long* start_pfn_p, unsigned long* max_pfn_p)
 	}
 
 	/* The device tree is probably in memory that we're about to hand over to the page
-	 * allocator, so make sure we don't use it after this.
+	 * allocator, so move it to the end and reserve that space.
 	 */
-	device_tree = NULL;
+	int fdt_size = fdt_totalsize(device_tree);
+	void *new_device_tree = (void *) (((*max_pfn_p << PAGE_SHIFT) - fdt_size) & PAGE_MASK);
+	if (new_device_tree != device_tree) {
+		memmove(new_device_tree, device_tree, fdt_size);
+	}
+	device_tree = new_device_tree;
+	*max_pfn_p = ((unsigned long) new_device_tree) >> PAGE_SHIFT;
 
 	build_pagetable(start_pfn_p, max_pfn_p);
 }
