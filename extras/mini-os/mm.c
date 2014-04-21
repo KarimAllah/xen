@@ -409,10 +409,9 @@ void init_mm(void)
     /*
      * now we can initialise the page allocator
      */
-    //FIXME: Doesn't print correct value!
     printk("MM: Initialise page allocator for %lx(%lx) - %lx(%lx)\n",
-           to_virt(PFN_PHYS(start_pfn)), PFN_PHYS(start_pfn),
-           to_virt(PFN_PHYS(max_pfn)), PFN_PHYS(max_pfn));
+           (unsigned long) to_virt(PFN_PHYS(start_pfn)), (unsigned long) PFN_PHYS(start_pfn),
+           (unsigned long) to_virt(PFN_PHYS(max_pfn)), (unsigned long) PFN_PHYS(max_pfn));
 
     init_page_allocator(PFN_PHYS(start_pfn), PFN_PHYS(max_pfn));
 
