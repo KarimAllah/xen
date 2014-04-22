@@ -77,6 +77,7 @@ stack_end:
 .align 13
 irqstack:
 	.fill (1024), 4, 0x0
+irqstack_end:
 .globl shared_info_page
 .align 13
 shared_info_page:
@@ -137,34 +138,20 @@ exception_vector_table:
 	b	fault @ prefetch call
 	b	fault @ prefetch abort
 	b	fault @ data abort //FIXME CLREX
-	b	irq_handler @ irq
-	b	firq_handler @ firq
+	b	irq_handler @ IRQ
+	.word 0xe7f000f0    @ abort on FIQ
 
 irq_handler:
-firq_handler:
-	ldr	sp, =irqstack
-	add	sp, sp, #(4*1024)
+	ldr	sp, =irqstack_end
+	push	{r0 - r12, r14}
 
-	@ Save registers
-	stmda	sp!, {r0 - r12}
-	stmda	sp!, {lr}
-
-	@ FIXME Find interrupt id and dispatch to the correct handler.
-	@ If event_irq
 	ldr	r0, IRQ_handler
 	cmp	r0, #0
-	beq	. @ If no IRQ handler was setup, just get stuck here!
-
-	adr	lr, 1f
-	mov	pc, r0
-1:
-	@bl	do_hypervisor_callback
-
-	@ Restore registers
-	ldmib	sp!, {lr}
-	ldmib	sp!, {r0 - r12}
+	.word	0x07f000f0    @ undeq - register dump if no handler
+	blx	r0
 
 	@ Return from IRQ
+	pop	{r0 - r12, r14}
 	subs	pc, lr, #4
 
 .globl IRQ_handler
