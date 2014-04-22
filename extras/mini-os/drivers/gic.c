@@ -2,6 +2,7 @@
 
 #include <mini-os/os.h>
 #include <mini-os/hypervisor.h>
+#include <libfdt.h>
 
 //#define VGIC_DEBUG
 #ifdef VGIC_DEBUG
@@ -11,7 +12,9 @@
 #define DEBUG(_f, _a...)    ((void)0)
 #endif
 
-extern unsigned long IRQ_handler;
+extern void (*IRQ_handler)(void);
+
+extern void *device_tree;
 
 struct gic {
 	volatile char *gicd_base;
@@ -120,10 +123,6 @@ static void gic_cpu_set_priority(struct gic *gic, char priority)
 	REG_WRITE32(REG(gicc(gic, GICC_PMR)), priority & 0x000000FF);
 }
 
-static void gic_set_handler(unsigned long gic_handler) {
-	IRQ_handler = gic_handler;
-}
-
 static unsigned long gic_readiar(struct gic *gic) {
 	return REG_READ32(REG(gicc(gic, GICC_IAR))) & 0x000003FF; // Interrupt ID
 }
@@ -164,12 +163,41 @@ static void gic_handler(void) {
 }
 
 void gic_init(void) {
-	// FIXME Get from dt!
-	gic.gicd_base = (char *)0x2c001000ULL;
-	gic.gicc_base = (char *)0x2c002000ULL;
+	gic.gicd_base = NULL;
+        int node = 0;
+        int depth = 0;
+	for (;;)
+        {
+                node = fdt_next_node(device_tree, node, &depth);
+                if (node <= 0 || depth < 0)
+                    break;
+
+		/*
+		int name_len = 0;
+		const char *name = fdt_get_name(device_tree, node, &name_len);
+		printk("Found node: %d (%.*s)\n", node, name_len, name);
+		*/
+
+		if (fdt_getprop(device_tree, node, "interrupt-controller", NULL)) {
+			int len = 0;
+			const uint64_t *reg = fdt_getprop(device_tree, node, "reg", &len);
+			if (reg == NULL || len != 32) {
+				printk("Bad 'reg' property: %p %d\n", reg, len);
+				continue;
+			}
+			gic.gicd_base = (char *) (long) fdt64_to_cpu(reg[0]);
+			gic.gicc_base = (char *) (long) fdt64_to_cpu(reg[2]);
+			printk("Found GIC: gicd_base = %p, gicc_base = %p\n", gic.gicd_base, gic.gicc_base);
+			break;
+		}
+	}
+	if (!gic.gicd_base) {
+		printk("GIC not found!\n");
+		BUG();
+	}
 	wmb();
 
-	gic_set_handler((unsigned long)gic_handler);
+	IRQ_handler = gic_handler;
 
 	gic_disable_interrupts(&gic);
 	gic_cpu_set_priority(&gic, 0xff);
