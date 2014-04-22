@@ -41,8 +41,7 @@ static struct gic gic;
 
 static inline uint32_t REG_READ32(volatile uint32_t *addr)
 {
-	uint32_t value, tmp;
-	tmp = (uint32_t)addr & 0x3; // 32-bit aligned
+	uint32_t value;
 	__asm__ __volatile__("ldr %0, [%1]":"=&r"(value):"r"(addr));
 	rmb();
 	return value;
@@ -50,8 +49,6 @@ static inline uint32_t REG_READ32(volatile uint32_t *addr)
 
 static inline void REG_WRITE32(volatile uint32_t *addr, unsigned int value)
 {
-	uint32_t tmp;
-	tmp = (uint32_t)addr & 0x3; // 32-bit aligned
 	__asm__ __volatile__("str %0, [%1]"::"r"(value), "r"(addr));
 	wmb();
 }
