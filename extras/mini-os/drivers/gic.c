@@ -201,7 +201,11 @@ void gic_init(void) {
 
 	gic_disable_interrupts(&gic);
 	gic_cpu_set_priority(&gic, 0xff);
+
+	/* Must call gic_enable_interrupts before enabling individual interrupts, otherwise our IRQ handler
+	 * gets called endlessly with spurious interrupts. */
+	gic_enable_interrupts(&gic);
+
 	gic_enable_interrupt(&gic, EVENTS_IRQ /* interrupt number */, 0x1 /*cpu_set*/, 1 /*level_sensitive*/, 0 /* ppi */);
 	gic_enable_interrupt(&gic, VIRTUALTIMER_IRQ /* interrupt number */, 0x1 /*cpu_set*/, 1 /*level_sensitive*/, 1 /* ppi */);
-	gic_enable_interrupts(&gic);
 }
