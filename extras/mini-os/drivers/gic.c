@@ -136,9 +136,7 @@ static void gic_eoir(struct gic *gic, uint32_t irq) {
 #define VIRTUALTIMER_IRQ 27
 
 //FIXME Move to a header file
-#define VTIMER_TICK 0x6000000
 void timer_handler(evtchn_port_t port, struct pt_regs *regs, void *ign);
-void increment_vtimer_compare(uint64_t inc);
 
 static void gic_handler(void) {
     unsigned int irq = gic_readiar(&gic);
@@ -150,7 +148,6 @@ static void gic_handler(void) {
         break;
     case VIRTUALTIMER_IRQ:
         timer_handler(0, NULL, 0);
-        increment_vtimer_compare(VTIMER_TICK);
         break;
     default:
         DEBUG("Unhandled irq\n");

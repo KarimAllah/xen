@@ -118,16 +118,43 @@ int gettimeofday(struct timeval *tv, void *tz)
     return 0;
 }
 
+void set_vtimer_compare(uint64_t value) {
+    uint32_t x, y;
+
+    DEBUG("New CompareValue : %llx\n", value);
+    x = 0xFFFFFFFFULL & value;
+    y = (value >> 32) & 0xFFFFFFFF;
+
+    __asm__ __volatile__("mcrr p15, 3, %0, %1, c14\n"
+            "isb"::"r"(x), "r"(y));
+
+    __asm__ __volatile__("mov %0, #0x1\n"
+            "mcr p15, 0, %0, c14, c3, 1\n" /* Enable timer and unmask the output signal */
+            "isb":"=r"(x));
+}
+
+void unset_vtimer_compare(void) {
+    uint32_t x;
+
+    __asm__ __volatile__("mov %0, #0x2\n"
+            "mcr p15, 0, %0, c14, c3, 1\n" /* Disable timer and mask the output signal */
+            "isb":"=r"(x));
+}
 
 void block_domain(s_time_t until)
 {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+    uint64_t until_count = ((until * counter_freq) / 1000000000) + cntvct_at_init;
     ASSERT(irqs_disabled());
-    if(monotonic_clock() < until)
+    if(read_virtual_count() < until_count)
     {
-        HYPERVISOR_set_timer_op(until);
-        HYPERVISOR_sched_op(SCHEDOP_block, 0);
+        set_vtimer_compare(until_count);
+        //char buf[] = "sleep\n"; (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(buf), buf);
+        __asm__ __volatile__("wfi");
+        //char wake[] = "wake\n"; (void)HYPERVISOR_console_io(CONSOLEIO_write, strlen(wake), wake);
+        unset_vtimer_compare();
+
+        /* Give the IRQ handler a chance to handle whatever woke us up. */
+        local_irq_enable();
         local_irq_disable();
     }
 }
@@ -143,47 +170,6 @@ void timer_handler(evtchn_port_t port, struct pt_regs *regs, void *ign)
     update_wallclock();
 }
 
-#define VTIMER_TICK 0x10000000
-void increment_vtimer_compare(uint64_t inc) {
-    uint32_t x, y;
-    uint64_t value;
-    __asm__ __volatile__("mrrc p15, 1, %0, %1, c14\n"
-            "isb":"=r"(x), "=r"(y));
-
-    // CompareValue = Counter + VTIMER_TICK
-    value = (0xFFFFFFFFFFFFFFFFULL & x) | ((0xFFFFFFFFFFFFFFFFULL & y) << 32);
-    DEBUG("Counter: %llx(x=%x and y=%x)\n", value, x, y);
-    value += inc;
-    DEBUG("New CompareValue : %llx\n", value);
-    x = 0xFFFFFFFFULL & value;
-    y = (value >> 32) & 0xFFFFFFFF;
-
-    __asm__ __volatile__("mcrr p15, 3, %0, %1, c14\n"
-            "isb"::"r"(x), "r"(y));
-
-    __asm__ __volatile__("mov %0, #0x1\n"
-            "mcr p15, 0, %0, c14, c3, 1\n" /* Enable timer and unmask the output signal */
-            "isb":"=r"(x));
-}
-
-static inline void enable_virtual_timer(void) {
-#if FIXME
-    uint32_t x, y;
-    uint64_t value;
-
-    __asm__ __volatile__("ldr %0, =0xffffffff\n"
-            "ldr %1, =0xffffffff\n"
-            "dsb\n"
-            "mcrr p15, 3, %0, %1, c14\n" /* set CompareValue to 0x0000ffff 0000ffff */
-            "isb\n"
-            "mov %0, #0x1\n"
-            "mcr p15, 0, %0, c14, c3, 1\n" /* Enable timer and unmask the output signal */
-            "isb":"=r"(x), "=r"(y));
-#else
-    increment_vtimer_compare(VTIMER_TICK);
-#endif
-}
-
 evtchn_port_t timer_port = -1;
 void arch_init_time(void)
 {
@@ -197,8 +183,6 @@ void arch_init_time(void)
     if(timer_port == -1)
         BUG();
     unmask_evtchn(timer_port);
-
-    enable_virtual_timer();
 }
 
 void arch_fini_time(void)
