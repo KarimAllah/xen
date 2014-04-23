@@ -19,6 +19,9 @@
  * Time functions
  *************************************************************************/
 
+static uint64_t cntvct_at_init;
+static uint32_t counter_freq;
+
 /* These are peridically updated in shared_info, and then copied here. */
 struct shadow_time_info {
     uint64_t tsc_timestamp;     /* TSC at last update of time vals.  */
@@ -50,28 +53,6 @@ static inline int time_values_up_to_date(void)
 }
 
 
-/*
- * Scale a 64-bit delta by scaling and multiplying by a 32-bit fraction,
- * yielding a 64-bit result.
- */
-static inline uint64_t scale_delta(uint64_t delta, uint32_t mul_frac, int shift)
-{
-    BUG();
-    return 0;
-}
-
-
-static unsigned long get_nsec_offset(void)
-{
-    return 0;
-#if FIXME
-    uint64_t now, delta;
-    rdtscll(now);
-    delta = now - shadow.tsc_timestamp;
-    return scale_delta(delta, shadow.tsc_to_nsec_mul, shadow.tsc_shift);
-#endif
-}
-
 
 static void get_time_values_from_xen(void)
 {
@@ -91,8 +72,12 @@ static void get_time_values_from_xen(void)
     shadow.tsc_to_usec_mul = shadow.tsc_to_nsec_mul / 1000;
 }
 
-
-
+static inline uint64_t read_virtual_count(void)
+{
+    uint32_t c_lo, c_hi;
+    __asm__ __volatile__("isb;mrrc p15, 1, %0, %1, c14":"=r"(c_lo), "=r"(c_hi));
+    return (((uint64_t) c_hi) << 32) + c_lo;
+}
 
 /* monotonic_clock(): returns # of nanoseconds passed since time_init()
  *		Note: This function is required to return accurate
@@ -100,18 +85,8 @@ static void get_time_values_from_xen(void)
  */
 uint64_t monotonic_clock(void)
 {
-    uint64_t time;
-    uint32_t local_time_version;
-
-    do {
-        local_time_version = shadow.version;
-        rmb();
-        time = shadow.system_timestamp + get_nsec_offset();
-        if (!time_values_up_to_date())
-            get_time_values_from_xen();
-        rmb();
-    } while (local_time_version != shadow.version);
-
+    uint64_t time = (1000000000 * (read_virtual_count() - cntvct_at_init)) / counter_freq;
+    //printk("monotonic_clock: %llu (%llu)\n", time, NSEC_TO_SEC(time));
     return time;
 }
 
@@ -212,8 +187,12 @@ static inline void enable_virtual_timer(void) {
 evtchn_port_t timer_port = -1;
 void arch_init_time(void)
 {
-    // FIXME: VIRQ_TIMER isn't supported under ARM, use ARM Generic Timer instead.
     printk("Initialising timer interface\n");
+
+    __asm__ __volatile__("mrc p15, 0, %0, c14, c0, 0":"=r"(counter_freq));
+    cntvct_at_init = read_virtual_count();
+    printk("Virtual Count register is %llx, freq = %d Hz\n", cntvct_at_init, counter_freq);
+
     timer_port = bind_virq(VIRQ_TIMER, (evtchn_handler_t)timer_handler, 0);
     if(timer_port == -1)
         BUG();
