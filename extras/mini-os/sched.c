@@ -100,11 +100,11 @@ void schedule(void)
         next = NULL;
         MINIOS_TAILQ_FOREACH_SAFE(thread, &thread_list, thread_list, tmp)
         {
-        	DEBUG("Checking thread : %s (runnable:%i)\n", thread->name, is_runnable(thread));
+            DEBUG("Checking thread : %s (runnable:%i)\n", thread->name, is_runnable(thread));
             if (!is_runnable(thread) && thread->wakeup_time != 0LL)
             {
                 if (thread->wakeup_time <= now) {
-                	DEBUG("Wake thread : %s\n", thread->name);
+                    DEBUG("Wake thread : %s\n", thread->name);
                     wake(thread);
                 }
                 else if (thread->wakeup_time < min_wakeup_time)
@@ -112,7 +112,7 @@ void schedule(void)
             }
             if(is_runnable(thread)) 
             {
-            	DEBUG("Thread (%s) is runnable, put it next\n", thread->name);
+                DEBUG("Thread (%s) is runnable, put it next\n", thread->name);
                 next = thread;
                 /* Put this thread on the end of the list */
                 MINIOS_TAILQ_REMOVE(&thread_list, thread, thread_list);
@@ -136,21 +136,21 @@ void schedule(void)
        inturrupted at the return instruction. And therefore at safe point. */
     DEBUG("prev ptr: %p", prev);
     if(prev)
-    	DEBUG(", prev: %s", prev->name);
+        DEBUG(", prev: %s", prev->name);
     DEBUG("\n");
 
     DEBUG("next ptr: %p", next);
-	if(prev)
-		DEBUG(", next: %s", next->name);
-	DEBUG("\n");
+    if(prev)
+        DEBUG(", next: %s", next->name);
+    DEBUG("\n");
 
     if(prev != next) {
-    	DEBUG("Switching between threads now:\n");
-    	DEBUG("\tOld thread : %s (sp:%x and ip%x)\n", prev->name, prev->sp, prev->ip);
-    	DEBUG("\tNew thread : %s (sp:%x and ip%x)\n", next->name, next->sp, next->ip);
-    	DEBUG("Before thread switch: (thread_name:%s)\n", current->name);
-    	switch_threads(prev, next);
-    	DEBUG("After thread switch: (thread_name:%s)\n", current->name);
+        DEBUG("Switching between threads now:\n");
+        DEBUG("\tOld thread : %s (sp:%x and ip%x)\n", prev->name, prev->sp, prev->ip);
+        DEBUG("\tNew thread : %s (sp:%x and ip%x)\n", next->name, next->sp, next->ip);
+        DEBUG("Before thread switch: (thread_name:%s)\n", current->name);
+        switch_threads(prev, next);
+        DEBUG("After thread switch: (thread_name:%s)\n", current->name);
     }
 
     DEBUG("Remove exited threads\n");
@@ -158,7 +158,7 @@ void schedule(void)
     {
         if(thread != prev)
         {
-        	DEBUG("Removing thread : %s\n", thread->name);
+            DEBUG("Removing thread : %s\n", thread->name);
             MINIOS_TAILQ_REMOVE(&exited_threads, thread, thread_list);
             free_pages(thread->stack, STACK_SIZE_PAGE_ORDER);
             xfree(thread);
@@ -173,7 +173,7 @@ struct thread* create_thread(char *name, void (*function)(void *), void *data)
     /* Call architecture specific setup. */
     thread = arch_create_thread(name, function, data);
     if(!thread)
-    	BUG(); //For now, FIXME should just return NULL
+        BUG(); //For now, FIXME should just return NULL
 
     /* Not runable, not exited, not sleeping */
     thread->flags = 0;
@@ -195,28 +195,28 @@ struct _reent *__getreent(void)
     struct _reent *_reent;
 
     if (!threads_started)
-	_reent = _impure_ptr;
+        _reent = _impure_ptr;
     else if (in_callback)
-	_reent = &callback_reent;
+        _reent = &callback_reent;
     else
-	_reent = &get_current()->reent;
+        _reent = &get_current()->reent;
 
 #ifndef NDEBUG
 #if defined(__x86_64__) || defined(__x86__)
     {
 #ifdef __x86_64__
-	register unsigned long sp asm ("rsp");
+        register unsigned long sp asm ("rsp");
 #else
-	register unsigned long sp asm ("esp");
+        register unsigned long sp asm ("esp");
 #endif
-	if ((sp & (STACK_SIZE-1)) < STACK_SIZE / 16) {
-	    static int overflowing;
-	    if (!overflowing) {
-		overflowing = 1;
-		printk("stack overflow\n");
-		BUG();
-	    }
-	}
+        if ((sp & (STACK_SIZE-1)) < STACK_SIZE / 16) {
+            static int overflowing;
+            if (!overflowing) {
+                overflowing = 1;
+                printk("stack overflow\n");
+                BUG();
+            }
+        }
     }
 #endif
 #else
@@ -272,7 +272,7 @@ void idle_thread_fn(void *unused)
 {
     threads_started = 1;
     while (1) {
-    	test_xenbus();
+        test_xenbus();
         block(current);
         schedule();
     }

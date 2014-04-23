@@ -27,6 +27,6 @@ struct thread* arch_create_thread(char *name, void (*function)(void *),
 
 void run_idle_thread(void)
 {
-	__asm__ __volatile__ ("mov sp, %0; mov pc, %1"::"r"(idle_thread->sp), "r"(idle_thread->ip));
-	/* Never arrive here! */
+    __asm__ __volatile__ ("mov sp, %0; mov pc, %1"::"r"(idle_thread->sp), "r"(idle_thread->ip));
+    /* Never arrive here! */
 }
