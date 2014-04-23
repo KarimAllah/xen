@@ -121,7 +121,7 @@ void console_print(struct consfront_dev *dev, char *data, int length)
 
 void print(int direct, const char *fmt, va_list args)
 {
-	static char buf[1024];
+    static char buf[1024];
 
     (void)vsnprintf(buf, sizeof(buf), fmt, args);
 
