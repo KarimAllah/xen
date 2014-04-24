@@ -22,6 +22,36 @@
 static uint64_t cntvct_at_init;
 static uint32_t counter_freq;
 
+/* Compute with 96 bit intermediate result: (a*b)/c */
+uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
+{
+    union {
+        uint64_t ll;
+        struct {
+            uint32_t low, high;
+        } l;
+    } u, res;
+    uint64_t rl, rh;
+
+    u.ll = a;
+    rl = (uint64_t)u.l.low * (uint64_t)b;
+    rh = (uint64_t)u.l.high * (uint64_t)b;
+    rh += (rl >> 32);
+    res.l.high = rh / c;
+    res.l.low = (((rh % c) << 32) + (rl & 0xffffffff)) / c;
+    return res.ll;
+}
+
+static inline s_time_t ticks_to_ns(uint64_t ticks)
+{
+    return muldiv64(ticks, SECONDS(1), counter_freq);
+}
+
+static inline uint64_t ns_to_ticks(s_time_t ns)
+{
+    return muldiv64(ns, counter_freq, SECONDS(1));
+}
+
 /* These are peridically updated in shared_info, and then copied here. */
 struct shadow_time_info {
     uint64_t tsc_timestamp;     /* TSC at last update of time vals.  */
@@ -85,7 +115,7 @@ static inline uint64_t read_virtual_count(void)
  */
 uint64_t monotonic_clock(void)
 {
-    uint64_t time = (1000000000 * (read_virtual_count() - cntvct_at_init)) / counter_freq;
+    s_time_t time = ticks_to_ns(read_virtual_count() - cntvct_at_init);
     //printk("monotonic_clock: %llu (%llu)\n", time, NSEC_TO_SEC(time));
     return time;
 }
@@ -143,7 +173,7 @@ void unset_vtimer_compare(void) {
 
 void block_domain(s_time_t until)
 {
-    uint64_t until_count = ((until * counter_freq) / 1000000000) + cntvct_at_init;
+    uint64_t until_count = ns_to_ticks(until) + cntvct_at_init;
     ASSERT(irqs_disabled());
     if(read_virtual_count() < until_count)
     {
