@@ -408,57 +408,58 @@ void *sbrk(ptrdiff_t increment)
 }
 #endif
 
+#ifdef MM_DEBUG
 static void test_memory(void) {
-	uint32_t *prev = NULL;
-	int i;
+    uint32_t *prev = NULL;
+    int i;
 
-	int size = 4096 * 1024;
-	for (;;) {
-		uint32_t *block = malloc(size);
+    int size = 4096 * 1024;
+    for (;;) {
+        uint32_t *block = malloc(size);
 
-		printk("malloc(%d) -> %p\n", size, block);
+        printk("malloc(%d) -> %p\n", size, block);
 
-		if (!block) {
-			size >>= 1;
-			if (size < 8) {
-				break;
-			}
-		} else {
-			/* Add to linked list. */
-			block[0] = (int) prev;
-			block[1] = size;
-			prev = block;
+        if (!block) {
+            size >>= 1;
+            if (size < 8) {
+                break;
+            }
+        } else {
+            /* Add to linked list. */
+            block[0] = (int) prev;
+            block[1] = size;
+            prev = block;
 
-			/* Fill the remaining words of the page with their addresses. */
-			for (i = 2; i < size / 4; i++) {
-				block[i] = (uint32_t) (block + i);
-			}
-		}
-	}
+            /* Fill the remaining words of the page with their addresses. */
+            for (i = 2; i < size / 4; i++) {
+                block[i] = (uint32_t) (block + i);
+            }
+        }
+    }
 
-	printk("Checking...\n");
+    printk("Checking...\n");
 
-	while (prev) {
-		uint32_t *block = prev;
-		int size = block[1];
-		prev = (uint32_t *) block[0];
+    while (prev) {
+        uint32_t *block = prev;
+        int size = block[1];
+        prev = (uint32_t *) block[0];
 
-		printk("Checking block at %p (size = %d)\n", block, size);
+        printk("Checking block at %p (size = %d)\n", block, size);
 
-		for (i = 2; i < size / 4; i++) {
-			uint32_t expected = (uint32_t) (block + i);
-			if (block[i] != expected) {
-				printk("Corrupted: got %p at %p!\n", block[i], expected);
-				BUG();
-			}
-		}
+        for (i = 2; i < size / 4; i++) {
+            uint32_t expected = (uint32_t) (block + i);
+            if (block[i] != expected) {
+                printk("Corrupted: got %p at %p!\n", block[i], expected);
+                BUG();
+            }
+        }
 
-		free(block);
-	}
+        free(block);
+    }
 
-	printk("Memory test passed\n");
+    printk("Memory test passed\n");
 }
-
+#endif
 
 void init_mm(void)
 {
@@ -481,7 +482,9 @@ void init_mm(void)
     
     arch_init_demand_mapping_area(max_pfn);
 
+#ifdef MM_DEBUG
     test_memory();
+#endif
 }
 
 void fini_mm(void)
