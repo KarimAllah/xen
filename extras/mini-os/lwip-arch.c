@@ -13,6 +13,8 @@
 #include <lwip/sys.h>
 #include <stdarg.h>
 
+void do_exit(void);
+
 /* Is called to initialize the sys_arch layer */
 void sys_init(void)
 {

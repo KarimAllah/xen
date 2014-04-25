@@ -52,7 +52,7 @@ reset:
 
 	@ Enable MMU / SCTLR
 	mrc	p15, 0, r1, c1, c0, 0	@ SCTLR
-	orr	r1, r1, #0x7		@ (dcache, barriers, MMU)
+	orr	r1, r1, #0x5		@ (dcache, MMU)
 	orr	r1, r1, #3 << 11	@ (icache, branch prediction)
 	mcr	p15, 0, r1, c1, c0, 0	@ SCTLR
 	isb

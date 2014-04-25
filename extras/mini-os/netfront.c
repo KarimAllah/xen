@@ -24,6 +24,8 @@ DECLARE_WAIT_QUEUE_HEAD(netfront_queue);
 #endif
 
 
+void mask_evtchn(uint32_t port);
+void unmask_evtchn(uint32_t port);
 
 #define NET_TX_RING_SIZE __CONST_RING_SIZE(netif_tx, PAGE_SIZE)
 #define NET_RX_RING_SIZE __CONST_RING_SIZE(netif_rx, PAGE_SIZE)
