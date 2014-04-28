@@ -35,7 +35,7 @@
         tmpx < tmpy ? tmpx : tmpy;            \
         })
 
-#define XENBUS_DEBUG
+/* #define XENBUS_DEBUG */
 #ifdef XENBUS_DEBUG
 #define DEBUG(_f, _a...) \
     printk("MINI_OS(file=xenbus.c, line=%d) " _f , __LINE__, ## _a)
@@ -274,7 +274,7 @@ static void xenbus_thread_func(void *ign)
 static void xenbus_evtchn_handler(evtchn_port_t port, struct pt_regs *regs,
 				  void *ign)
 {
-	printk("[%s]\n", __func__);
+    /* printk("[%s]\n", __func__); */
     wake_up(&xb_waitq);
 }
 
@@ -680,7 +680,9 @@ char *xenbus_transaction_start(xenbus_transaction_t *xbt)
     err = errmsg(rep);
     if (err)
 	return err;
-    sscanf((char *)(rep + 1), "%u", xbt);
+    int trans;
+    sscanf((char *)(rep + 1), "%u", &trans);
+    *xbt = trans;
     free(rep);
     return NULL;
 }
@@ -774,7 +776,7 @@ char* xenbus_printf(xenbus_transaction_t xbt,
 domid_t xenbus_get_self_id(void)
 {
     char *dom_id;
-    domid_t ret;
+    int ret;
 
     BUG_ON(xenbus_read(XBT_NIL, "domid", &dom_id));
     sscanf(dom_id, "%d", &ret);

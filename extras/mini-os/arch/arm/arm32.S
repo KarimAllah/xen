@@ -8,88 +8,76 @@ _start:
 .rept   8
         mov     r0, r0
 .endr
-        b       1f
+        b       reset
         .word   0x016f2818      @ Magic numbers to help the loader
         .word   _start		@ absolute load/run zImage address
         .word   _end - _start   @ zImage size
 	@ end of zImage header
 
+@ Called at boot time. Sets up MMU, exception vectors and stack, and then calls C setup() function.
+@ => r2 -> DTB
+@ <= never returns
+reset:
+	@ Fill in the top-level translation table (at page_dir). Based on Mini-OS code.
+	@ Populate the whole pagedir with 1MB section descriptors.
+	@ TEX[2:0] C B = 001 1 1 (outer and inner write-back, write-allocate)
+	ldr	r0, =(0x2 +  		/* Section entry */ \
+		      0xc +  		/* C B */ \
+		      (3 << 10) + 	/* Read/write */ \
+		      (1 << 12) +	/* TEX */ \
+		      (1 << 16) +	/* Sharable */ \
+		      (1<<19))		/* Non-secure */
+	ldr	r1, =page_dir
+	add	r3, r1, #4*4*1024	@ Limit (4 GB address space, 4 byte entries)
+
 1:
-#if FIXME
-@ core processor specific initialization
-	@ Initialize ACTLR core register
-	mrc p15, 0, <Rt>, c1, c0, 1
-	mcr p15, 0, <Rt>, c1, c0, 1
-#endif
+	str	r0, [r1],#4		@ write the section entry
+	add	r0, r0, #1 << 20 	@ next physical page
+	cmp	r1, r3
+	bne	1b
 
-@ Save dtb pointer passed by the hypervisor
-	mov	r4, r2		@ save dtb pointer
-
-@ Build pagetables
-	bl	build_pagetables
-
-	ldr	r2, =page_dir
-	MCR	p15, 0, r2, c2, c0, 0	@ set ttbr0
+	@ Tell the system where our new table is located.
+	ldr	r3, =page_dir
+	mcr	p15, 0, r3, c2, c0, 0	@ set ttbr0
 
 	@ Set access permission for domains
-	mov	r0, #0x3
-	MCR	p15, 0, r0, c3, c0, 0
+	@ Domains are deprecated, but we have to configure them anyway.
+	@ We mark every page as being domain 0 and set domain 0 to "client mode"
+	@ (client mod = use access flags in page table).
+	mov	r0, #1			@ 1 = client
+	mcr	p15, 0, r0, c3, c0, 0	@ DACR
+
+	@ Invalidate TLB
+	mcr	p15, 0, r1, c8, c7, 0	@ TLBIALL
+
+	@ Enable MMU / SCTLR
+	mrc	p15, 0, r1, c1, c0, 0	@ SCTLR
+	orr	r1, r1, #0x5		@ (dcache, MMU)
+	orr	r1, r1, #3 << 11	@ (icache, branch prediction)
+	mcr	p15, 0, r1, c1, c0, 0	@ SCTLR
 	isb
-	
-	ldr	r0, =mmu_switched
 
-	@ enable mmu / sctlr
-	mrc	p15, 0, r1, c1, c0, 0	@ read sctlr
-	orr	r1, r1, #0x1		@ enable mmu
-	@orr	r1, r1, #0x4		@ enable cache
-	orr	r1, r1, #0x02		@ enable barrier enable
-	@mcr	p15, 0, r1, c1, c0, 0	@ write sctlr
-	isb
-
-	@ jump to the virtual address now
-	mov	pc, r0
-
-@ If we're here, then we're very lucky
-mmu_switched:
-
-@ set VBAR = exception_vector_table
+	@ Set VBAR -> exception_vector_table
 	@ SCTLR.V = 0
 	adr	r0, exception_vector_table
 	mcr	p15, 0, r0, c12, c0, 0
 
-@ load stack
-	ldr	sp, =stack
-	add	sp, sp, #(4*4*1024)
+	@ Initialise 16 KB stack
+	ldr	sp, =stack_end
 
-
-	mov	r0, r4		@ set r0 = dtb pointer
+	mov	r0, r2			@ C wants the DTB pointer in r0
 	b	arch_init
-
-
-@ Populate the whole pagedir with 1MB section descriptors for now (1-1 mapping)
-build_pagetables:
-	ldr	r0, =(0x2 + (1 << 16) + (1<<19)) @ First section entry (sharable + NS ).
-	ldr	r1, =page_dir
-	add	r2, r1, #(4*4*1024) @ Limit
-
-1:
-	str	r0, [r1] @ write the section entry
-
-	add	r0, r0, #(1 << 20) @ next physical page.
-	add	r1, r1, #4 @ next pagedir entry
-	cmp	r1, r2
-	bne	1b
-
-	mov	pc, lr
 
 .pushsection .data
 .align 13
 .globl stack
 stack:
 	.fill (4*1024), 4, 0x0
+stack_end:
 .align 13
 irqstack:
 	.fill (1024), 4, 0x0
+irqstack_end:
 .globl shared_info_page
 .align 13
 shared_info_page:
@@ -97,47 +85,73 @@ shared_info_page:
 .align	14
 page_dir:
 	.fill (4*1024), 4, 0x0
+fault_dump:
+	.fill 17, 4, 0x0		@ On fault, we save the registers + CPSR here
 
 .popsection
+
+fault:
+	cpsid	aif			@ Disable interrupts
+
+	ldr	r13, =fault_dump
+	stmia	r13, {r0-r12}		@ Dump the non-banked registers directly (well, unless from FIQ mode)
+	str	r14, [r13, #15 << 2]	@ Our r14 is the faulting r15
+	mov	r0, r13
+
+	@ Save the caller's CPSR (our SPSR) too.
+	mrs	r1, SPSR
+	str	r1, [r13, #16 << 2]
+
+	@ Switch to the mode we came from to get r13 and r14.
+	@ If coming from user mode, use System mode instead so we're still
+	@ privileged.
+	and	r1, r1, #0x1f		@ r1 = SPSR mode
+	cmp	r1, #0x10		@ If from User mode
+	moveq	r1, #0x1f		@ Then use System mode instead
+
+	mrs	r3, CPSR		@ r3 = our CPSR
+	bic	r2, r3, #0x1f
+	orr	r2, r2, r1
+	msr	CPSR, r2		@ Change to mode r1
+
+	@ Save old mode's r13, r14
+	str	r13, [r0, #13 << 2]
+	str	r14, [r0, #14 << 2]
+
+	msr	CPSR, r3		@ Back to fault mode
+
+	@ Call C code to format the register dump.
+	@ Clobbers the stack, but we're not going to return anyway.
+	ldr	r13, =stack_end
+	bl	dump_registers
+1:
+	wfi
+	b	1b
 
 @ exception base address
 .align 5
 .globl exception_vector_table
 exception_vector_table:
-	b	. @ reset
-	b	. @ undefined instruction
-	b	. @ supervisor call
-	b	. @ prefetch call
-	b	. @ prefetch abort
-	b	. @ data abort //FIXME CLREX
-	b	irq_handler @ irq
-	b	firq_handler @ firq
+	b	fault @ reset
+	b	fault @ undefined instruction
+	b	fault @ supervisor call
+	b	fault @ prefetch call
+	b	fault @ prefetch abort
+	b	fault @ data abort //FIXME CLREX
+	b	irq_handler @ IRQ
+	.word 0xe7f000f0    @ abort on FIQ
 
 irq_handler:
-firq_handler:
-	ldr	sp, =irqstack
-	add	sp, sp, #(4*1024)
+	ldr	sp, =irqstack_end
+	push	{r0 - r12, r14}
 
-	@ Save registers
-	stmda	sp!, {r0 - r12}
-	stmda	sp!, {lr}
-
-	@ FIXME Find interrupt id and dispatch to the correct handler.
-	@ If event_irq
 	ldr	r0, IRQ_handler
 	cmp	r0, #0
-	beq	. @ If no IRQ handler was setup, just get stuck here!
-
-	adr	lr, 1f
-	mov	pc, r0
-1:
-	@bl	do_hypervisor_callback
-
-	@ Restore registers
-	ldmib	sp!, {lr}
-	ldmib	sp!, {r0 - r12}
+	.word	0x07f000f0    @ undeq - register dump if no handler
+	blx	r0
 
 	@ Return from IRQ
+	pop	{r0 - r12, r14}
 	subs	pc, lr, #4
 
 .globl IRQ_handler
@@ -157,55 +171,3 @@ __arch_switch_threads:
 	ldr	lr, [r1, #4] @ ip
 	ldr	fp, [sp, #-4] @ restore fp from the stack
 	mov	pc, lr
-
-#if 0
-pagetables_code:
-	bl	build_pagetables
-
-	ldr	r2, =(page_dir+PHYS_START)
-	MCR	p15, 0, r2, c2, c0, 0	@ set ttbr0
-
-	@ Set access permission for domains
-	mov	r0, #0x3
-	MCR	p15, 0, r0, c3, c0, 0
-
-	ldr	r0, =mmu_switched
-
-	@ enable mmu / sctlr
-	isb
-	MRC	p15, 0, r1, c1, c0, 0	@ read sctlr
-	orr	r1, r1, #0x1
-	MCR	p15, 0, r1, c1, c0, 0	@ write sctlr
-	MRC     p15, 0, r1, c0, c0, 0	@ read id reg
-
-	@ jump to the virtual address now
-	mov	pc, r0
-
-mmu_switched:
-	b	.
-
-build_pagetables:
-	ldr	r2, =(page_dir + PHYS_START)
-	ldr	r0, =(pagetable + PHYS_START + 1)
-	str	r0, [r2]
-
-	ldr	r2, =(pagetable + PHYS_START)
-	add	r1, r2, #1000
-
-	@ setup entry
-	ldr	r0, =(PHYS_START + 0x3)
-2:
-	str	r0, [r2], #4
-	add	r0, r0, #1 << 12
-	cmp	r2, r1
-	bne	2b
-	mov	pc, lr
-
-.pushsection .data
-.align	14
-page_dir:
-	.fill (1024), 4, 0x0
-pagetable:
-	.fill (1024*50), 4, 0x0
-.popsection
-#endif

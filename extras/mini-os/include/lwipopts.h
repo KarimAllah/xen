@@ -19,5 +19,6 @@
 #define MEMP_NUM_SYS_TIMEOUT 10
 #define TCP_SND_BUF 3000
 #define TCP_MSS 1500
+#define MEM_ALIGNMENT 4
 
 #endif /* __LWIP_LWIPOPTS_H__ */

@@ -8,7 +8,7 @@
 
 void arch_fini(void);
 
-#define BUG() while(1){}
+#define BUG() asm volatile (".word 0xe7f000f0\n"); /* Undefined instruction; will call our fault handler. */
 
 #define smp_processor_id() 0
 

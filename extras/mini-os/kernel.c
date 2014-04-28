@@ -68,6 +68,8 @@ void setup_xen_features(void)
 __attribute__((weak)) void app_shutdown(unsigned reason)
 {
     printk("Shutdown requested: %d\n", reason);
+    struct sched_shutdown sched_shutdown = { .reason = reason };
+    HYPERVISOR_sched_op(SCHEDOP_shutdown, &sched_shutdown);
 }
 
 static void shutdown_thread(void *p)
@@ -75,12 +77,18 @@ static void shutdown_thread(void *p)
     const char *path = "control/shutdown";
     const char *token = path;
     xenbus_event_queue events = NULL;
-    char *shutdown, *err;
+    char *shutdown = NULL, *err;
     unsigned int shutdown_reason;
     xenbus_watch_path_token(XBT_NIL, path, token, &events);
-    while ((err = xenbus_read(XBT_NIL, path, &shutdown)) != NULL)
+    while ((err = xenbus_read(XBT_NIL, path, &shutdown)) != NULL || !strcmp(shutdown, ""))
     {
-        free(err);
+        if (err)
+            free(err);
+        if (shutdown)
+        {
+            free(shutdown);
+            shutdown = NULL;
+        }
         xenbus_wait_for_watch(&events);
     }
     err = xenbus_unwatch_path_token(XBT_NIL, path, token);
@@ -98,6 +106,8 @@ static void shutdown_thread(void *p)
         shutdown_reason = SHUTDOWN_crash;
     app_shutdown(shutdown_reason);
     free(shutdown);
+
+    for (;;) ;
 }
 #endif
 
@@ -105,8 +115,17 @@ static void shutdown_thread(void *p)
 /* This should be overridden by the application we are linked against. */
 __attribute__((weak)) int app_main(start_info_t *si)
 {
-	printk("Dummy main: start_info=%p\n", si);
+    printk("kernel.c: dummy main: start_info=%p\n", si);
     return 0;
+}
+
+void dump_registers(int *saved_registers) {
+    int i;
+    printk("Fault!\n");
+    for (i = 0; i < 16; i++) {
+        printk("r%d = %x\n", i, saved_registers[i]);
+    }
+    printk("CPSR = %x\n", saved_registers[16]);
 }
 
 void gic_init(void);
@@ -126,10 +145,8 @@ void start_kernel(void)
     /* Init time and timers. */
     init_time();
 
-#if FIXME
     /* Init the console driver. */
     init_console();
-#endif
 
     /* Init grant tables */
     init_gnttab();
@@ -146,28 +163,28 @@ void start_kernel(void)
 #endif
 
 
-	gic_init();
+    gic_init();
 
 //#define VTIMER_TEST
 #ifdef VTIMER_TEST
     while(1){
-		int x, y, z;
-    	z = 0;
-    	// counter
-    	__asm__ __volatile__("mrrc p15, 1, %0, %1, c14;isb":"=r"(x), "=r"(y));
-    	printk("Counter: %x-%x\n", x, y);
+        int x, y, z;
+        z = 0;
+        // counter
+        __asm__ __volatile__("mrrc p15, 1, %0, %1, c14;isb":"=r"(x), "=r"(y));
+        printk("Counter: %x-%x\n", x, y);
 
-    	__asm__ __volatile__("mrrc p15, 3, %0, %1, c14;isb":"=r"(x), "=r"(y));
-    	printk("CompareValue: %x-%x\n", x, y);
+        __asm__ __volatile__("mrrc p15, 3, %0, %1, c14;isb":"=r"(x), "=r"(y));
+        printk("CompareValue: %x-%x\n", x, y);
 
-    	// TimerValue
-    	__asm__ __volatile__("mrc p15, 0, %0, c14, c3, 0;isb":"=r"(x));
-    	printk("TimerValue: %x\n", x);
+        // TimerValue
+        __asm__ __volatile__("mrc p15, 0, %0, c14, c3, 0;isb":"=r"(x));
+        printk("TimerValue: %x\n", x);
 
-    	// control register
-    	__asm__ __volatile__("mrc p15, 0, %0, c14, c3, 1;isb":"=r"(x));
-    	printk("ControlRegister: %x\n", x);
-    	while(z++ < 0xfffff){}
+        // control register
+        __asm__ __volatile__("mrc p15, 0, %0, c14, c3, 1;isb":"=r"(x));
+        printk("ControlRegister: %x\n", x);
+        while(z++ < 0xfffff){}
     }
 #endif
 

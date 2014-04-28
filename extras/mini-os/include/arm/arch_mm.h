@@ -25,10 +25,10 @@ extern char stack[];
 #define PHYS_PFN(x)	((x) >> L1_PAGETABLE_SHIFT)
 
 #define virt_to_pfn(_virt)         (PFN_DOWN(to_phys(_virt)))
-#define virt_to_mfn(_virt)         (0)
-#define mach_to_virt(_mach)        (0)
-#define virt_to_mach(_virt)        (0)
-#define mfn_to_virt(_mfn)          (0)
+#define virt_to_mfn(_virt)         (PFN_DOWN(to_phys(_virt)))
+#define mach_to_virt(_mach)        (_mach)
+#define virt_to_mach(_virt)        (_virt)
+#define mfn_to_virt(_mfn)          (to_virt(PFN_PHYS(_mfn)))
 #define pfn_to_virt(_pfn)          (to_virt(PFN_PHYS(_pfn)))
 
 // FIXME
