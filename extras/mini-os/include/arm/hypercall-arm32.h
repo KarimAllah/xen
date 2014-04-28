@@ -72,7 +72,7 @@ HYPERVISOR_shutdown(
 	unsigned int reason)
 {
 	struct sched_shutdown shutdown = { .reason = reason };
-	return low_shutdown(&shutdown);
+	HYPERVISOR_sched_op(SCHEDOP_shutdown, &shutdown);
 }
 
 inline long
