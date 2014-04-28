@@ -162,12 +162,18 @@ IRQ_handler:
 .globl __arch_switch_threads
 @ r0 = &prev->sp & r1 = &(next->sp)
 __arch_switch_threads:
-	@ store sp, ip for prev thread
-	str	sp, [r0] @ sp
-	str	lr, [r0, #4] @ ip
-	str	fp, [sp, #-4] @ store fp on the stack
-	@ Load sp, ip for next thread
-	ldr	sp, [r1] @ sp
-	ldr	lr, [r1, #4] @ ip
-	ldr	fp, [sp, #-4] @ restore fp from the stack
+	stmia	r0, {sp, lr}	@ Store current sp and ip to prev's struct thread
+	str	fp, [sp, #-4]	@ Store fp on the old stack
+
+	ldmia	r1, {sp, lr}	@ Load new sp, ip from next's struct thread
+	ldr	fp, [sp, #-4]	@ Restore fp from the stack
+
 	mov	pc, lr
+
+.globl arm_start_thread
+arm_start_thread:
+	pop	{r0, r1}
+	@ r0 = user data
+	@ r1 -> thread's main function
+	ldr	lr, =exit_thread
+	bx	r1

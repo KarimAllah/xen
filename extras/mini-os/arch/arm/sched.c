@@ -1,6 +1,7 @@
 #include <mini-os/sched.h>
 #include <mini-os/xmalloc.h>
 
+void arm_start_thread(void);
 
 /* Architecture specific setup of thread creation */
 struct thread* arch_create_thread(char *name, void (*function)(void *),
@@ -15,12 +16,16 @@ struct thread* arch_create_thread(char *name, void (*function)(void *),
     printk("Thread \"%s\": pointer: 0x%lx, stack: 0x%lx\n", name, thread,
             thread->stack);
 
-    thread->sp = (unsigned long)thread->stack + STACK_SIZE;
     /* Save pointer to the thread on the stack, used by current macro */
     *((unsigned long *)thread->stack) = (unsigned long)thread;
 
-    thread->ip = (unsigned long) function;
-    /* FIXME thread->r0 = (unsigned long)data; */
+    /* Push the details to pass to arm_start_thread onto the stack */
+    int *sp = (int *) (thread->stack + STACK_SIZE);
+    *(--sp) = (int) function;
+    *(--sp) = (int) data;
+    thread->sp = (unsigned long) sp;
+
+    thread->ip = (unsigned long) arm_start_thread;
 
     return thread;
 }
