@@ -76,7 +76,9 @@ TARGET := mini-os
 SUBDIRS := xenbus
 
 # Drivers
+ifeq ($(XEN_TARGET_ARCH),arm32)
 src-y += drivers/gic.c
+endif
 
 
 
@@ -196,8 +198,11 @@ $(OBJ_DIR)/$(TARGET): links include/list.h $(OBJS) $(APP_O) arch_lib
 	$(LD) -r $(LDFLAGS) $(HEAD_OBJ) $(APP_O) $(OBJS) $(LDARCHLIB) $(LDLIBS) -o $@.o
 	$(OBJCOPY) -w -G $(GLOBAL_PREFIX)* -G _start $@.o $@.o
 	$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) $@.o $(EXTRA_OBJS) -o $@
-	#gzip -f -9 -c $@ >$@.gz
+ifeq ($(XEN_TARGET_ARCH),arm32)
 	$(OBJCOPY) -O binary $@ $@.img
+else
+	gzip -f -9 -c $@ >$@.gz
+endif
 
 .PHONY: clean arch_clean
 

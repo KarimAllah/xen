@@ -1,3 +1,6 @@
+#include <mini-os/os.h>
+#include <mini-os/mm.h>
+
 #if defined(__x86_64__)
 char irqstack[2 * STACK_SIZE];
 

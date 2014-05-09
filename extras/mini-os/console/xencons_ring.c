@@ -16,20 +16,22 @@
 
 DECLARE_WAIT_QUEUE_HEAD(console_queue);
 
+#ifdef __arm__
 static inline int hvm_get_parameter(int idx, uint64_t *value)
 {
-	struct xen_hvm_param xhv;
-	int ret;
+    struct xen_hvm_param xhv;
+    int ret;
 
-	xhv.domid = DOMID_SELF;
-	xhv.index = idx;
-	ret = HYPERVISOR_hvm_op(HVMOP_get_param, &xhv);
-	if (ret < 0) {
-		BUG();
-	}
-	*value = xhv.value;
-	return ret;
+    xhv.domid = DOMID_SELF;
+    xhv.index = idx;
+    ret = HYPERVISOR_hvm_op(HVMOP_get_param, &xhv);
+    if (ret < 0) {
+        BUG();
+    }
+    *value = xhv.value;
+    return ret;
 }
+#endif
 
 static inline void notify_daemon(struct consfront_dev *dev)
 {
@@ -169,49 +171,59 @@ int xencons_ring_recv(struct consfront_dev *dev, char *data, unsigned len)
 
 struct consfront_dev *xencons_ring_init(void)
 {
-	int err;
-	struct consfront_dev *dev;
-	uint64_t v = -1;
-	evtchn_port_t evtchn;
+    int err;
+    struct consfront_dev *dev;
+    evtchn_port_t evtchn;
 
-	hvm_get_parameter(HVM_PARAM_CONSOLE_EVTCHN, &v);
-	evtchn = v;
-	/* printk("Console is on port %d\n", evtchn); */
+#ifdef __arm__
+    uint64_t v = -1;
 
-	if (!evtchn)
-		return 0;
+    hvm_get_parameter(HVM_PARAM_CONSOLE_EVTCHN, &v);
+    evtchn = v;
+    /* printk("Console is on port %d\n", evtchn); */
+#else
+    evtchn = start_info.console.domU.evtchn;
+#endif
 
-	dev = malloc(sizeof(struct consfront_dev));
-	memset(dev, 0, sizeof(struct consfront_dev));
-	dev->nodename = "device/console";
-	dev->dom = 0;
-	dev->backend = 0;
-	dev->ring_ref = 0;
+    if (!evtchn)
+        return 0;
+
+    dev = malloc(sizeof(struct consfront_dev));
+    memset(dev, 0, sizeof(struct consfront_dev));
+    dev->nodename = "device/console";
+    dev->dom = 0;
+    dev->backend = 0;
+    dev->ring_ref = 0;
 
 #ifdef HAVE_LIBC
-	dev->fd = -1;
+    dev->fd = -1;
 #endif
-	dev->evtchn = evtchn;
-	hvm_get_parameter(HVM_PARAM_CONSOLE_PFN, &v);
-	dev->ring = (struct xencons_interface *) mfn_to_virt(v);
-        /* printk("Console ring is at %x\n", dev->ring); */
+    dev->evtchn = evtchn;
+#ifdef __arm__
+    hvm_get_parameter(HVM_PARAM_CONSOLE_PFN, &v);
+    dev->ring = (struct xencons_interface *) mfn_to_virt(v);
+#else
+    dev->evtchn = start_info.console.domU.evtchn;
+    dev->ring = (struct xencons_interface *) mfn_to_virt(start_info.console.domU.mfn);
+#endif
+    /* printk("Console ring is at %x\n", dev->ring); */
 
-	err = bind_evtchn(dev->evtchn, console_handle_input, dev);
-	if (err <= 0) {
-		printk("XEN console request chn bind failed %i\n", err);
-                free(dev);
-		return NULL;
-	}
-        unmask_evtchn(dev->evtchn);
+    err = bind_evtchn(dev->evtchn, console_handle_input, dev);
+    if (err <= 0) {
+        printk("XEN console request chn bind failed %i\n", err);
+        free(dev);
+        return NULL;
+    }
+    unmask_evtchn(dev->evtchn);
 
-	/* In case we have in-flight data after save/restore... */
-	notify_daemon(dev);
+    /* In case we have in-flight data after save/restore... */
+    notify_daemon(dev);
 
-	return dev;
+    return dev;
 }
 
 void xencons_resume(void)
 {
-	(void)xencons_ring_init();
+    (void)xencons_ring_init();
 }
 
