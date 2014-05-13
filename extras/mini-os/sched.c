@@ -266,13 +266,10 @@ void wake(struct thread *thread)
     set_runnable(thread);
 }
 
-void test_xenbus(void);
-
 void idle_thread_fn(void *unused)
 {
     threads_started = 1;
     while (1) {
-        test_xenbus();
         block(current);
         schedule();
     }
