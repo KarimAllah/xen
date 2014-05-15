@@ -119,15 +119,6 @@ __attribute__((weak)) int app_main(start_info_t *si)
     return 0;
 }
 
-void dump_registers(int *saved_registers) {
-    int i;
-    printk("Fault!\n");
-    for (i = 0; i < 16; i++) {
-        printk("r%d = %x\n", i, saved_registers[i]);
-    }
-    printk("CPSR = %x\n", saved_registers[16]);
-}
-
 #ifdef __arm__
 void gic_init(void);
 #endif

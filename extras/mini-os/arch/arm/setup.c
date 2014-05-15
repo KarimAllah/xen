@@ -11,6 +11,13 @@
  */
 union start_info_union start_info_union;
 
+extern void *fault_reset;
+extern void *fault_undefined_instruction;
+extern void *fault_svc;
+extern void *fault_prefetch_call;
+extern void *fault_prefetch_abort;
+extern void *fault_data_abort;
+
 /*
  * Shared page for communicating with the hypervisor.
  * Events flags go here, for example.
@@ -62,4 +69,32 @@ arch_fini(void)
 void
 arch_do_exit(void)
 {
+}
+
+void dump_registers(int *saved_registers) {
+    char *fault_name;
+    void *fault_handler;
+    int i;
+    printk("Fault!\n");
+    for (i = 0; i < 16; i++) {
+        printk("r%d = %x\n", i, saved_registers[i]);
+    }
+    printk("CPSR = %x\n", saved_registers[16]);
+    fault_handler = (void *) saved_registers[17];
+    if (fault_handler == &fault_reset)
+	fault_name = "reset";
+    else if (fault_handler == &fault_undefined_instruction)
+	fault_name = "undefined_instruction";
+    else if (fault_handler == &fault_svc)
+	fault_name = "svc";
+    else if (fault_handler == &fault_prefetch_call)
+	fault_name = "prefetch_call";
+    else if (fault_handler == &fault_prefetch_abort)
+	fault_name = "prefetch_abort";
+    else if (fault_handler == &fault_data_abort)
+	fault_name = "data_abort";
+    else
+	fault_name = "unknown fault type!";
+
+    printk("Fault handler at %x called (%s)\n", fault_handler, fault_name);
 }
