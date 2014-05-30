@@ -26,9 +26,9 @@
  *
  */
 
-#include <xen/xen.h>
 #include <mini-os/os.h>
 #include <mini-os/lib.h> /* for printk, memcpy */
+#include <xen/xen.h>
 
 /*
  * Shared page for communicating with the hypervisor.

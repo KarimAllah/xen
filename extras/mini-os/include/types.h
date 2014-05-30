@@ -40,7 +40,7 @@ typedef unsigned long       u_quad_t;
 typedef struct { unsigned long pte; } pte_t;
 #endif /* __i386__ || __x86_64__ */
 
-#ifdef __x86_64__ || __aarch64__
+#if defined(__x86_64__) || defined(__aarch64__)
 #define __pte(x) ((pte_t) { (x) } )
 #else
 #define __pte(x) ({ unsigned long long _x = (x);        \
@@ -73,7 +73,7 @@ typedef unsigned long uint64_t;
 #endif
 typedef uint64_t uintmax_t;
 typedef  int64_t intmax_t;
-typedef uint64_t off_t;
+typedef  int64_t off_t;
 #endif
 
 typedef intptr_t            ptrdiff_t;

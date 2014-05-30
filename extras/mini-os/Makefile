@@ -52,6 +52,8 @@ DEF_CFLAGS += $(flags-y)
 
 CFLAGS += -mfloat-abi=hard
 
+EXTRA_DEPS += links include/list.h
+
 # Include common mini-os makerules.
 include minios.mk
 
@@ -72,11 +74,12 @@ EXTRA_OBJS =
 TARGET := mini-os
 
 # Subdirectories common to mini-os
-#SUBDIRS := lib xenbus console
-SUBDIRS := xenbus
+SUBDIRS := lib xenbus console lib/fdt
 
 # Drivers
+ifeq ($(XEN_TARGET_ARCH),arm32)
 src-y += drivers/gic.c
+endif
 
 
 
@@ -192,12 +195,15 @@ ifneq ($(APP_OBJS),)
 APP_O=$(OBJ_DIR)/$(TARGET)_app.o 
 endif
 
-$(OBJ_DIR)/$(TARGET): links include/list.h $(OBJS) $(APP_O) arch_lib
+$(OBJ_DIR)/$(TARGET): $(OBJS) $(APP_O) arch_lib
 	$(LD) -r $(LDFLAGS) $(HEAD_OBJ) $(APP_O) $(OBJS) $(LDARCHLIB) $(LDLIBS) -o $@.o
 	$(OBJCOPY) -w -G $(GLOBAL_PREFIX)* -G _start $@.o $@.o
 	$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) $@.o $(EXTRA_OBJS) -o $@
-	#gzip -f -9 -c $@ >$@.gz
+ifeq ($(XEN_TARGET_ARCH),arm32)
 	$(OBJCOPY) -O binary $@ $@.img
+else
+	gzip -f -9 -c $@ >$@.gz
+endif
 
 .PHONY: clean arch_clean
 
@@ -231,4 +237,3 @@ tags:
 .PHONY: TAGS
 TAGS:
 	$(all_sources) | xargs etags
-

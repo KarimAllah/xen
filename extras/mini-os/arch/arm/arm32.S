@@ -86,7 +86,7 @@ shared_info_page:
 page_dir:
 	.fill (4*1024), 4, 0x0
 fault_dump:
-	.fill 17, 4, 0x0		@ On fault, we save the registers + CPSR here
+	.fill 18, 4, 0x0		@ On fault, we save the registers + CPSR + handler address
 
 .popsection
 
@@ -120,6 +120,10 @@ fault:
 
 	msr	CPSR, r3		@ Back to fault mode
 
+	ldr	r1, [r0, #17 << 2]
+	sub	r1, r1, #12		@ Fix to point at start of handler
+	str	r1, [r0, #17 << 2]
+
 	@ Call C code to format the register dump.
 	@ Clobbers the stack, but we're not going to return anyway.
 	ldr	r13, =stack_end
@@ -128,16 +132,34 @@ fault:
 	wfi
 	b	1b
 
+@ We want to store a unique value to identify this handler, without corrupting
+@ any of the registers. So, we store r15 (which will point just after the branch).
+@ Later, we subtract 12 so the user gets pointed at the start of the exception
+@ handler.
+#define FAULT(name)			\
+.globl fault_##name;			\
+fault_##name:				\
+	ldr	r13, =fault_dump;	\
+	str	r15, [r13, #17 << 2];	\
+	b	fault
+
+FAULT(reset)
+FAULT(undefined_instruction)
+FAULT(svc)
+FAULT(prefetch_call)
+FAULT(prefetch_abort)
+FAULT(data_abort)
+
 @ exception base address
 .align 5
 .globl exception_vector_table
 exception_vector_table:
-	b	fault @ reset
-	b	fault @ undefined instruction
-	b	fault @ supervisor call
-	b	fault @ prefetch call
-	b	fault @ prefetch abort
-	b	fault @ data abort //FIXME CLREX
+	b	fault_reset
+	b	fault_undefined_instruction
+	b	fault_svc
+	b	fault_prefetch_call
+	b	fault_prefetch_abort
+	b	fault_data_abort @ FIXME CLREX
 	b	irq_handler @ IRQ
 	.word 0xe7f000f0    @ abort on FIQ
 
